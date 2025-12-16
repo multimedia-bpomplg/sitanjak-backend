@@ -28,6 +28,7 @@ app.use("/api/pendaftaran", pendaftaranRoute);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // START SERVER
+// START SERVER
 app.listen(PORT, async () => {
   await connectDB();
 
@@ -35,22 +36,11 @@ app.listen(PORT, async () => {
   const mode =
     process.env.NODE_ENV === "production" ? "PRODUCTION" : "DEVELOPMENT";
 
-  const msg = `
-    🚀 BPOM Internship API Server
-    Status     : RUNNING
-    Database   : MongoDB Connected
-    Mode       : ${mode}
-    Port       : ${PORT}
-    Started At : ${time}
-  `;
-
-  console.log(
-    boxen(msg, {
-      padding: 1,
-      margin: 1,
-      borderStyle: "round",
-      borderColor: "cyan",
-      backgroundColor: "#0f172a",
-    })
-  );
+  console.log("========================================");
+  console.log("🚀 BPOM Internship API Server");
+  console.log("Status     : RUNNING");
+  console.log("Database   : MongoDB Connected");
+  console.log(`Mode       : ${mode}`);
+  console.log(`Port       : ${PORT}`);
+  console.log(`Started At : ${time}`);
 });
