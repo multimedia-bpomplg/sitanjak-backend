@@ -3,7 +3,12 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Role from "../models/Role";
+import { verifyCaptcha } from "../utils/verifyCaptcha";
 
+/* ===================== HELPER ===================== */
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/* ===================== REGISTER ===================== */
 export const register = async (req: Request, res: Response) => {
   try {
     const { name, email, password, role } = req.body;
@@ -32,23 +37,40 @@ export const register = async (req: Request, res: Response) => {
   }
 };
 
+/* ===================== LOGIN ===================== */
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, captchaToken } = req.body;
+
+    if (!captchaToken) {
+      return res.status(400).json({ message: "Captcha wajib diisi" });
+    }
+
+    const captchaValid = await verifyCaptcha(captchaToken);
+    if (!captchaValid) {
+      return res.status(403).json({ message: "Captcha tidak valid" });
+    }
 
     const user = await User.findOne({ email }).populate("roles");
-    if (!user)
+    if (!user) {
+      await delay(1200);
       return res.status(400).json({ message: "Email tidak ditemukan" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Password salah" });
+    if (!isMatch) {
+      await delay(1200);
+      return res.status(400).json({ message: "Password salah" });
+    }
 
     const roleNames = user.roles.map((r: any) => r.name);
+
+    await delay(1500); // ⏳ delay login sukses
 
     const token = jwt.sign(
       { userId: user._id, roles: roleNames },
       process.env.JWT_SECRET || "supersecret",
-      { expiresIn: "1d" }
+      { expiresIn: "10m" }
     );
 
     res.json({ token, roles: roleNames });

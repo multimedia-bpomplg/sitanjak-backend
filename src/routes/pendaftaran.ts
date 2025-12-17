@@ -1,13 +1,15 @@
 import { Router } from "express";
 import multer from "multer";
-import Pendaftaran from "../models/pendaftaran";
+import Pendaftaran from "../models/Pendaftaran";
 
 const router = Router();
 
-// ===== Multer Setup untuk Upload Surat =====
+/* ==========================
+   MULTER CONFIG
+========================== */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "./uploads/"); // Pastikan folder uploads dibuat
+    cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
     const uniqueName = Date.now() + "-" + file.originalname;
@@ -15,46 +17,45 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
 
-// ======================
-// ROUTE: POST /api/pendaftaran
-// ======================
+/* ==========================
+   POST /api/pendaftaran
+========================== */
 router.post("/", upload.single("surat"), async (req, res) => {
   try {
-    const body = req.body;
+    const { kategori, jumlahPeserta, peserta } = req.body;
 
-    // Pastikan field wajib tidak kosong
-    const requiredFields = [
-      "nama",
-      "email",
-      "nohp",
-      "sekolah",
-      "jurusan",
-      "tingkat",
-      "alamat",
-      "tanggalMulai",
-      "tanggalSelesai",
-    ];
-
-    for (const field of requiredFields) {
-      if (!body[field]) {
-        return res.status(400).json({
-          message: `Field '${field}' wajib diisi`,
-        });
-      }
+    if (!kategori || !jumlahPeserta || !peserta) {
+      return res.status(400).json({
+        message: "Data pendaftaran tidak lengkap",
+      });
     }
 
-    // Simpan data
-    await Pendaftaran.create({
-      ...body,
-      surat: req.file?.filename || null,
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Surat pengantar wajib diupload",
+      });
+    }
+
+    const parsedPeserta = JSON.parse(peserta);
+
+    const data = await Pendaftaran.create({
+      kategori,
+      jumlahPeserta,
+      peserta: parsedPeserta,
+      suratPengantar: req.file.filename,
     });
 
-    res.json({ message: "Pendaftaran berhasil disimpan!" });
+    res.status(201).json({
+      message: "Pendaftaran berhasil dikirim",
+      data,
+    });
   } catch (error: any) {
-    console.error("Error Pendaftaran:", error);
-
+    console.error(error);
     res.status(500).json({
       message: "Gagal menyimpan pendaftaran",
       error: error.message,
@@ -62,47 +63,54 @@ router.post("/", upload.single("surat"), async (req, res) => {
   }
 });
 
-// ======================
-// ROUTE: GET /api/pendaftaran/cek?nama=
-// ======================
-router.get("/cek", async (req, res) => {
-  try {
-    const { email } = req.query;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email wajib diisi" });
-    }
-
-    const data = await Pendaftaran.findOne({ email });
-
-    if (!data) {
-      return res.status(404).json({ message: "Email tidak ditemukan" });
-    }
-
-    res.json({ data });
-  } catch (error) {
-    res.status(500).json({ message: "Terjadi kesalahan server" });
-  }
+/* ==========================
+   GET /api/pendaftaran
+   (Admin)
+========================== */
+router.get("/", async (_req, res) => {
+  const data = await Pendaftaran.find().sort({ createdAt: -1 });
+  res.json(data);
 });
 
-// Update status + jawaban admin
-router.put("/update-status/:id", async (req, res) => {
-  try {
-    const { status, jawabanAdmin } = req.body;
+/* ==========================
+   GET /api/pendaftaran/cek
+========================== */
+router.get("/cek", async (req, res) => {
+  const { email } = req.query;
 
-    const data = await Pendaftaran.findByIdAndUpdate(
-      req.params.id,
-      { status, jawabanAdmin },
-      { new: true }
-    );
-
-    res.json({
-      message: "Status berhasil diperbarui",
-      data,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Gagal update status" });
+  if (!email) {
+    return res.status(400).json({ message: "Email wajib diisi" });
   }
+
+  const data = await Pendaftaran.findOne({
+    "peserta.email": email,
+  });
+
+  if (!data) {
+    return res.status(404).json({
+      message: "Data tidak ditemukan",
+    });
+  }
+
+  res.json(data);
+});
+
+/* ==========================
+   PUT /api/pendaftaran/:id
+========================== */
+router.put("/:id", async (req, res) => {
+  const { status, jawabanAdmin } = req.body;
+
+  const data = await Pendaftaran.findByIdAndUpdate(
+    req.params.id,
+    { status, jawabanAdmin },
+    { new: true }
+  );
+
+  res.json({
+    message: "Status berhasil diperbarui",
+    data,
+  });
 });
 
 export default router;
