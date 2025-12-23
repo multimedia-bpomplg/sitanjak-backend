@@ -14,10 +14,11 @@ export const register = async (req: Request, res: Response) => {
     const { name, email, password, role } = req.body;
 
     const userExists = await User.findOne({ email });
-    if (userExists)
+    if (userExists) {
       return res.status(400).json({ message: "Email sudah terdaftar" });
+    }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const roles = await Role.find({
       name: { $in: role ? [role] : ["peserta"] },
@@ -26,13 +27,16 @@ export const register = async (req: Request, res: Response) => {
     const user = await User.create({
       name,
       email,
-      password: hashed,
+      password: hashedPassword,
       roles: roles.map((r) => r._id),
     });
 
-    res.status(201).json({ message: "User berhasil dibuat", userId: user._id });
-  } catch (err) {
-    console.error(err);
+    res.status(201).json({
+      message: "User berhasil dibuat",
+      userId: user._id,
+    });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -65,17 +69,26 @@ export const login = async (req: Request, res: Response) => {
 
     const roleNames = user.roles.map((r: any) => r.name);
 
-    await delay(1500); // ⏳ delay login sukses
+    await delay(1000);
 
     const token = jwt.sign(
-      { userId: user._id, roles: roleNames },
-      process.env.JWT_SECRET || "supersecret",
-      { expiresIn: "10m" }
+      {
+        id: user._id,
+        email: user.email,
+        roles: roleNames,
+      },
+      process.env.JWT_SECRET as string,
+      {
+        expiresIn: "15m",
+      }
     );
 
-    res.json({ token, roles: roleNames });
-  } catch (err) {
-    console.error(err);
+    res.json({
+      token,
+      roles: roleNames,
+    });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 };

@@ -8,7 +8,7 @@ import path from "path";
 import router from "./routes";
 import { connectDB } from "./config/database";
 import authRoutes from "./routes/authRoutes";
-import pendaftaranRoute from "./routes/pendaftaran";
+import pendaftaranRoute from "./routes/pendaftaran.route";
 
 dotenv.config();
 
@@ -27,7 +27,6 @@ app.use("/api/pendaftaran", pendaftaranRoute);
 // STATIC FILE (PDF, surat, gambar)
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// START SERVER
 // START SERVER
 app.listen(PORT, async () => {
   await connectDB();
