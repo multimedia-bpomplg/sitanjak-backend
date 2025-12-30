@@ -16,7 +16,24 @@ export const createPendaftaran = async (req: Request, res: Response) => {
       });
     }
 
+    // ================= TAMBAHAN (GABUNGAN) =================
     const parsedPeserta = JSON.parse(peserta);
+
+    // ✅ VALIDASI TANGGAL MAGANG (TAMBAHAN SAJA)
+    for (const p of parsedPeserta) {
+      if (!p.tanggalMulaiMagang || !p.tanggalSelesaiMagang) {
+        return res.status(400).json({
+          message: "Tanggal mulai dan selesai magang wajib diisi",
+        });
+      }
+
+      if (p.tanggalSelesaiMagang < p.tanggalMulaiMagang) {
+        return res.status(400).json({
+          message: "Tanggal selesai harus setelah tanggal mulai",
+        });
+      }
+    }
+    // =======================================================
 
     const data = await Pendaftaran.create({
       kategori,

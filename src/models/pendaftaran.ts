@@ -3,6 +3,10 @@ import mongoose, { Schema, Document } from "mongoose";
 interface IPeserta {
   nama: string;
   posisi: string;
+
+  tanggalMulaiMagang: string;
+  tanggalSelesaiMagang: string;
+
   tempatLahir: string;
   tanggalLahir: string;
   jenisKelamin: string;
@@ -30,6 +34,10 @@ const PesertaSchema = new Schema<IPeserta>(
   {
     nama: { type: String, required: true },
     posisi: { type: String, required: true },
+
+    tanggalMulaiMagang: { type: String, required: true },
+    tanggalSelesaiMagang: { type: String, required: true },
+
     tempatLahir: { type: String, required: true },
     tanggalLahir: { type: String, required: true },
     jenisKelamin: { type: String, required: true },

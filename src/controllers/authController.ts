@@ -79,7 +79,7 @@ export const login = async (req: Request, res: Response) => {
       },
       process.env.JWT_SECRET as string,
       {
-        expiresIn: "15m",
+        expiresIn: "60m",
       }
     );
 
