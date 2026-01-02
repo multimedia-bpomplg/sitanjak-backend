@@ -5,6 +5,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   roles: Types.ObjectId[];
+   status: "Aktif" | "Nonaktif";
 }
 
 const userSchema: Schema = new Schema(
@@ -13,9 +14,15 @@ const userSchema: Schema = new Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     roles: [{ type: Schema.Types.ObjectId, ref: "Role" }],
+    status: {
+      type: String,
+      enum: ["Aktif", "Nonaktif"],
+      default: "Aktif",
+    },
   },
   { timestamps: true }
 );
+
 
 export default mongoose.models.User ||
   mongoose.model<IUser>("User", userSchema);

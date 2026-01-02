@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { upload } from "../middelwares/upload.middleware";
+import { upload } from "../middlewares/upload.middleware";
 import {
   createPendaftaran,
   getAllPendaftaran,
@@ -13,5 +13,11 @@ router.post("/", upload.single("surat"), createPendaftaran);
 router.get("/", getAllPendaftaran);
 router.get("/cek", cekPendaftaran);
 router.put("/:id", updateStatus);
+router.put(
+  "/:id",
+  upload.single("suratBalasan"),
+  updateStatus
+);
+
 
 export default router;

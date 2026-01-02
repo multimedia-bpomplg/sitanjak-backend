@@ -5,8 +5,9 @@ import {
   nonaktifkanPeserta,
   aktifkanPeserta,
 } from "../controllers/superadminController";
-import { authMiddleware } from "../middelwares/auth.middleware";
-import { roleMiddleware } from "../middelwares/role.middleware";
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { roleMiddleware } from "../middlewares/role.middleware";
+import { getMentor } from "../controllers/mentorController";
 
 const router = Router();
 
@@ -37,5 +38,14 @@ router.patch(
   roleMiddleware(["superadmin"]),
   aktifkanPeserta
 );
+
+
+router.get(
+  "/mentor",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  getMentor
+);
+
 
 export default router;

@@ -2,6 +2,7 @@ import { Router } from "express";
 import authRoutes from "./authRoutes";
 import superadminRoutes from "./superadminRoutes";
 import pendaftaranRoutes from "./pendaftaran.route";
+import mentorRoutes from "./mentor.route";
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.get("/test", (req, res) => {
 router.use("/auth", authRoutes);
 router.use("/superadmin", superadminRoutes);
 router.use("/pendaftaran", pendaftaranRoutes);
+router.use("/mentor", mentorRoutes);
 
 export default router;
