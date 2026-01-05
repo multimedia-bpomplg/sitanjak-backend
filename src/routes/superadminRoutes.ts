@@ -5,8 +5,8 @@ import {
   nonaktifkanPeserta,
   aktifkanPeserta,
 } from "../controllers/superadminController";
-import { authMiddleware } from "../middlewares/auth.middleware";
-import { roleMiddleware } from "../middlewares/role.middleware";
+import { authMiddleware } from "../middlelwares/auth.middleware";
+import { roleMiddleware } from "../middlelwares/role.middleware";
 import { getMentor } from "../controllers/mentorController";
 import { buatAdmin, getAdmin } from "../controllers/adminController";
 

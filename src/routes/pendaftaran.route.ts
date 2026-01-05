@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { upload } from "../middlewares/upload.middleware";
+import { upload } from "../middlelwares/upload.middleware";
 import {
   createPendaftaran,
   getAllPendaftaran,

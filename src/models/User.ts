@@ -5,7 +5,8 @@ export interface IUser extends Document {
   email: string;
   password: string;
   roles: Types.ObjectId[];
-   status: "Aktif" | "Nonaktif";
+  status: "Aktif" | "Nonaktif";
+  jurusan: string;
 }
 
 const userSchema: Schema = new Schema(
@@ -19,10 +20,13 @@ const userSchema: Schema = new Schema(
       enum: ["Aktif", "Nonaktif"],
       default: "Aktif",
     },
+    pesertaBimbingan: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );
-
 
 export default mongoose.models.User ||
   mongoose.model<IUser>("User", userSchema);
