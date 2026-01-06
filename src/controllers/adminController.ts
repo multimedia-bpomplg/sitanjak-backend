@@ -90,3 +90,29 @@ export const getAdmin = async (_req: Request, res: Response) => {
     });
   }
 };
+
+/* ================= NONAKTIFKAN ================= */
+export const nonaktifkanAdmin = async (req: Request, res: Response) => {
+  try {
+    await User.findByIdAndUpdate(req.params.id, {
+      status: "Nonaktif",
+    });
+
+    res.json({ message: "Akun admin berhasil dinonaktifkan" });
+  } catch {
+    res.status(500).json({ message: "Gagal menonaktifkan akun admin" });
+  }
+};
+
+/* ================= AKTIFKAN ================= */
+export const aktifkanAdmin = async (req: Request, res: Response) => {
+  try {
+    await User.findByIdAndUpdate(req.params.id, {
+      status: "Aktif",
+    });
+
+    res.json({ message: "Akun admin berhasil diaktifkan" });
+  } catch {
+    res.status(500).json({ message: "Gagal mengaktifkan akun admin" });
+  }
+};
