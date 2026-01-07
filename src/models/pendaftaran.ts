@@ -25,7 +25,6 @@ export interface IPendaftaran extends Document {
   peserta: IPeserta[];
   suratPengantar: string;
   suratBalasan: string;
-  
 
   status: string;
   jawabanAdmin: string;
@@ -82,9 +81,8 @@ const PendaftaranSchema = new Schema<IPendaftaran>(
     },
 
     suratBalasan: {
-  type: String,
-},
-
+      type: String,
+    },
 
     status: {
       type: String,
