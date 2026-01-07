@@ -12,12 +12,6 @@ const router = Router();
 router.post("/", upload.single("surat"), createPendaftaran);
 router.get("/", getAllPendaftaran);
 router.get("/cek", cekPendaftaran);
-router.put("/:id", updateStatus);
-router.put(
-  "/:id",
-  upload.single("suratBalasan"),
-  updateStatus
-);
-
+router.put("/:id", upload.single("suratBalasan"), updateStatus);
 
 export default router;

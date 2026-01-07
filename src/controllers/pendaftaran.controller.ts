@@ -81,16 +81,33 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
 
 /* ================= UPDATE STATUS ================= */
 export const updateStatus = async (req: Request, res: Response) => {
-  const { status, jawabanAdmin } = req.body;
+  try {
+    const { status, jawabanAdmin } = req.body;
 
-  const data = await Pendaftaran.findByIdAndUpdate(
-    req.params.id,
-    { status, jawabanAdmin },
-    { new: true }
-  );
+    const updateData: any = {
+      status,
+      jawabanAdmin,
+    };
 
-  res.json({
-    message: "Status diperbarui",
-    data,
-  });
+    // ✅ JIKA ADA SURAT BALASAN
+    if (req.file) {
+      updateData.suratBalasan = req.file.filename;
+    }
+
+    const data = await Pendaftaran.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    );
+
+    res.json({
+      message: "Status dan surat balasan berhasil diperbarui",
+      data,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: "Gagal memperbarui status",
+      error: error.message,
+    });
+  }
 };
