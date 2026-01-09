@@ -5,14 +5,19 @@ import {
   nonaktifkanPeserta,
   aktifkanPeserta,
 } from "../controllers/superadminController";
-import { authMiddleware } from "../middlelwares/auth.middleware";
-import { roleMiddleware } from "../middlelwares/role.middleware";
-import { 
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { roleMiddleware } from "../middlewares/role.middleware";
+import {
   getMentor,
   nonaktifkanMentor,
   aktifkanMentor,
 } from "../controllers/mentorController";
-import { buatAdmin, getAdmin, nonaktifkanAdmin, aktifkanAdmin } from "../controllers/adminController";
+import {
+  buatAdmin,
+  getAdmin,
+  nonaktifkanAdmin,
+  aktifkanAdmin,
+} from "../controllers/adminController";
 
 const router = Router();
 
@@ -44,7 +49,6 @@ router.patch(
   aktifkanPeserta
 );
 
-
 router.get(
   "/mentor",
   authMiddleware,
@@ -66,7 +70,6 @@ router.patch(
   aktifkanMentor
 );
 
-
 router.post(
   "/buat-admin",
   authMiddleware,
@@ -74,12 +77,7 @@ router.post(
   buatAdmin
 );
 
-router.get(
-  "/admin",
-  authMiddleware,
-  roleMiddleware(["superadmin"]),
-  getAdmin
-);
+router.get("/admin", authMiddleware, roleMiddleware(["superadmin"]), getAdmin);
 
 router.patch(
   "/admin/:id/nonaktif",

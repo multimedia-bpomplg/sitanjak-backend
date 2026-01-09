@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { buatMentor } from "../controllers/mentorController";
-import { authMiddleware } from "../middlelwares/auth.middleware";
-import { roleMiddleware } from "../middlelwares/role.middleware";
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { roleMiddleware } from "../middlewares/role.middleware";
 
 const router = Router();
 

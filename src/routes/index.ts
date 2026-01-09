@@ -3,18 +3,20 @@ import authRoutes from "./authRoutes";
 import superadminRoutes from "./superadminRoutes";
 import pendaftaranRoutes from "./pendaftaran.route";
 import mentorRoutes from "./mentor.route";
+import logbookRoutes from "./logbook.routes";
 
 const router = Router();
 
-/* TEST ROUTE */
+/* TEST */
 router.get("/test", (req, res) => {
   res.json({ message: "API route test successful!" });
 });
 
-/* ROUTE GROUP */
+/* ROUTES */
 router.use("/auth", authRoutes);
 router.use("/superadmin", superadminRoutes);
 router.use("/pendaftaran", pendaftaranRoutes);
 router.use("/mentor", mentorRoutes);
+router.use("/logbook", logbookRoutes); // 🔥 INI YANG HILANG
 
 export default router;

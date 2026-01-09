@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import Pendaftaran from "../models/Pendaftaran";
+import Pendaftaran from "../models/pendaftaran";
 
 /* ================= CREATE ================= */
 export const createPendaftaran = async (req: Request, res: Response) => {
