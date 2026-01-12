@@ -1,8 +1,14 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+interface IAsal {
+  jenis: "Universitas" | "SMK";
+  nama: string;
+}
+
 interface IPeserta {
   nama: string;
   posisi: string;
+  asal: IAsal;
 
   tanggalMulaiMagang: string;
   tanggalSelesaiMagang: string;
@@ -10,11 +16,13 @@ interface IPeserta {
   tempatLahir: string;
   tanggalLahir: string;
   jenisKelamin: string;
+
   provinsi: string;
   kota: string;
   kecamatan: string;
   kelurahan: string;
   alamatLengkap: string;
+
   email: string;
   wa: string;
 }
@@ -23,66 +31,59 @@ export interface IPendaftaran extends Document {
   kategori: "sendiri" | "bersama";
   jumlahPeserta: number;
   peserta: IPeserta[];
-  suratPengantar: string;
-  suratBalasan: string;
 
-  status: string;
-  jawabanAdmin: string;
-  createdAt: Date;
+  mentor?: mongoose.Types.ObjectId; // ✅ TAMBAHAN
+
+  suratPengantar: string;
+  suratBalasan?: string;
+
+  status: "Menunggu" | "Sedang Diproses" | "Disetujui" | "Ditolak";
+  jawabanAdmin?: string;
 }
 
 const PesertaSchema = new Schema<IPeserta>(
   {
-    nama: { type: String, required: true },
-    posisi: { type: String, required: true },
+    nama: String,
+    posisi: String,
 
-    tanggalMulaiMagang: { type: String, required: true },
-    tanggalSelesaiMagang: { type: String, required: true },
+    asal: {
+      jenis: String,
+      nama: String,
+    },
 
-    tempatLahir: { type: String, required: true },
-    tanggalLahir: { type: String, required: true },
-    jenisKelamin: { type: String, required: true },
+    tanggalMulaiMagang: String,
+    tanggalSelesaiMagang: String,
 
-    provinsi: { type: String, required: true },
-    kota: { type: String, required: true },
-    kecamatan: { type: String, required: true },
-    kelurahan: { type: String, required: true },
+    tempatLahir: String,
+    tanggalLahir: String,
+    jenisKelamin: String,
 
-    alamatLengkap: { type: String, required: true },
-    email: { type: String, required: true },
-    wa: { type: String, required: true },
+    provinsi: String,
+    kota: String,
+    kecamatan: String,
+    kelurahan: String,
+    alamatLengkap: String,
+
+    email: String,
+    wa: String,
   },
   { _id: false }
 );
 
-const PendaftaranSchema = new Schema<IPendaftaran>(
+const PendaftaranSchema = new Schema(
   {
-    kategori: {
-      type: String,
-      enum: ["sendiri", "bersama"],
-      required: true,
+    kategori: String,
+    jumlahPeserta: Number,
+    peserta: [PesertaSchema],
+
+    mentor: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
-    jumlahPeserta: {
-      type: Number,
-      required: true,
-      min: 1,
-      max: 5,
-    },
-
-    peserta: {
-      type: [PesertaSchema],
-      required: true,
-    },
-
-    suratPengantar: {
-      type: String,
-      required: true,
-    },
-
-    suratBalasan: {
-      type: String,
-    },
+    suratPengantar: String,
+    suratBalasan: String,
 
     status: {
       type: String,
@@ -90,14 +91,9 @@ const PendaftaranSchema = new Schema<IPendaftaran>(
       default: "Menunggu",
     },
 
-    jawabanAdmin: {
-      type: String,
-      default: "",
-    },
+    jawabanAdmin: String,
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 export default mongoose.model<IPendaftaran>("Pendaftaran", PendaftaranSchema);

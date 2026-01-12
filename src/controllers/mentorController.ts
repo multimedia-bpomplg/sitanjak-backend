@@ -8,91 +8,69 @@ import { mentorEmailTemplate } from "../utils/mentorEmailTemplate";
 /* ================= BUAT AKUN MENTOR + EMAIL ================= */
 export const buatMentor = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, pesertaBimbingan } = req.body;
-    // pesertaBimbingan: string[] (nama peserta)
+    const { name, email, password, posisiMentor } = req.body;
 
-    /* VALIDASI */
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !posisiMentor) {
       return res.status(400).json({
-        message: "Nama, email, dan password wajib diisi",
+        message: "Nama, email, password, dan posisi mentor wajib diisi",
       });
     }
 
-    /* CEK EMAIL */
     const exists = await User.findOne({ email });
     if (exists) {
-      return res.status(409).json({
-        message: "Email sudah terdaftar",
-      });
+      return res.status(409).json({ message: "Email sudah terdaftar" });
     }
 
-    /* ROLE MENTOR */
     const mentorRole = await Role.findOne({ name: "mentor" });
     if (!mentorRole) {
-      return res.status(500).json({
-        message: "Role mentor belum tersedia",
-      });
+      return res.status(500).json({ message: "Role mentor tidak tersedia" });
     }
 
-    /* HASH PASSWORD */
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
 
-    /* CREATE USER */
     const mentor = await User.create({
       name,
       email,
-      password: hashedPassword,
+      password: hashed,
       roles: [mentorRole._id],
       status: "Aktif",
-      pesertaBimbingan: pesertaBimbingan || [], // optional
+      posisiMentor,
     });
 
-    /* KIRIM EMAIL KE MENTOR */
     await sendEmail({
       to: email,
-      subject: "Akun Mentor Magang Telah Dibuat",
+      subject: "Akun Mentor Magang",
       html: mentorEmailTemplate({
         name,
         email,
-        password, // ⚠️ hanya dikirim via email
+        password,
         role: "Mentor",
-        pesertaBimbingan: pesertaBimbingan || [],
+        pesertaBimbingan: [],
       }),
     });
 
     res.status(201).json({
-      message: "Akun mentor berhasil dibuat & email terkirim",
-      mentor: {
-        id: mentor._id,
-        name: mentor.name,
-        email: mentor.email,
-        status: mentor.status,
-      },
+      message: "Akun mentor berhasil dibuat",
+      mentor,
     });
-  } catch (error) {
-    console.error("[BUAT MENTOR ERROR]", error);
-    res.status(500).json({
-      message: "Gagal membuat akun mentor",
-    });
+  } catch (err) {
+    console.error("[BUAT MENTOR]", err);
+    res.status(500).json({ message: "Gagal membuat akun mentor" });
   }
 };
 
 /* ================= GET DATA MENTOR ================= */
-export const getMentor = async (req: Request, res: Response) => {
+export const getMentor = async (_req: Request, res: Response) => {
   try {
-    const mentorRole = await Role.findOne({ name: "mentor" });
-    if (!mentorRole) return res.json([]);
+    const role = await Role.findOne({ name: "mentor" });
 
-    const data = await User.find({
-      roles: mentorRole._id,
-    })
-      .select("name email status createdAt")
-      .sort({ createdAt: -1 });
+    const data = await User.find({ roles: role?._id }).select(
+      "name email status posisiMentor"
+    );
 
     res.json(data);
-  } catch (error) {
-    console.error("[GET MENTOR ERROR]", error);
-    res.status(500).json({ message: "Gagal mengambil data mentor" });
+  } catch {
+    res.status(500).json({ message: "Gagal memuat mentor" });
   }
 };
 

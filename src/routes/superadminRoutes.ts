@@ -18,6 +18,7 @@ import {
   nonaktifkanAdmin,
   aktifkanAdmin,
 } from "../controllers/adminController";
+import { updatePosisiPeserta } from "../controllers/superadminController";
 
 const router = Router();
 
@@ -91,6 +92,14 @@ router.patch(
   authMiddleware,
   roleMiddleware(["superadmin"]),
   aktifkanAdmin
+);
+
+/* ================= UPDATE POSISI PESERTA ================= */
+router.put(
+  "/pendaftaran/:id/posisi",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  updatePosisiPeserta
 );
 
 export default router;

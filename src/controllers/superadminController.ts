@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
 import Role from "../models/Role";
+import Pendaftaran from "../models/pendaftaran"; // ✅ INI YANG KURANG
 import { isStrongPassword } from "../utils/generatePassword";
 import { sendEmail } from "../utils/sendEmail";
 import { pesertaEmailTemplate } from "../utils/emailTemplate";
@@ -130,5 +131,54 @@ export const aktifkanPeserta = async (req: Request, res: Response) => {
     res.json({ message: "Akun berhasil diaktifkan" });
   } catch (error) {
     res.status(500).json({ message: "Gagal mengaktifkan akun" });
+  }
+};
+
+/* ================= UPDATE POSISI PESERTA ================= */
+export const updatePosisiPeserta = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { indexPeserta, posisi } = req.body;
+
+    console.log("UPDATE POSISI MASUK:", { id, indexPeserta, posisi });
+
+    if (indexPeserta === undefined || !posisi) {
+      return res.status(400).json({
+        message: "indexPeserta dan posisi wajib diisi",
+      });
+    }
+
+    const index = Number(indexPeserta);
+    if (Number.isNaN(index)) {
+      return res.status(400).json({
+        message: "indexPeserta harus number",
+      });
+    }
+
+    const pendaftaran = await Pendaftaran.findById(id);
+    if (!pendaftaran) {
+      return res.status(404).json({
+        message: "Pendaftaran tidak ditemukan",
+      });
+    }
+
+    if (!pendaftaran.peserta[index]) {
+      return res.status(400).json({
+        message: "Index peserta tidak valid",
+      });
+    }
+
+    // ✅ UPDATE POSISI
+    pendaftaran.peserta[index].posisi = posisi;
+    await pendaftaran.save();
+
+    return res.status(200).json({
+      message: "Posisi magang berhasil diperbarui",
+    });
+  } catch (error: any) {
+    console.error("[UPDATE POSISI ERROR]", error);
+    return res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };
