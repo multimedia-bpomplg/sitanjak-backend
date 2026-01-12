@@ -25,7 +25,12 @@ const LogbookSchema = new mongoose.Schema(
     keterangan: String,
 
     files: [String], // simpan PATH / URL foto
+    approvedByMentor: {
+      type: Boolean,
+      default: false,
+    },
   },
+
   { timestamps: true }
 );
 

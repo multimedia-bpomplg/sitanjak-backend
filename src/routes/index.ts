@@ -4,6 +4,8 @@ import superadminRoutes from "./superadminRoutes";
 import pendaftaranRoutes from "./pendaftaran.route";
 import mentorRoutes from "./mentor.route";
 import logbookRoutes from "./logbook.routes";
+import laporanBulananRoutes from "./laporanBulanan.routes";
+import laporanAkhirRoutes from "./laporanAkhir.routes";
 
 const router = Router();
 
@@ -17,6 +19,8 @@ router.use("/auth", authRoutes);
 router.use("/superadmin", superadminRoutes);
 router.use("/pendaftaran", pendaftaranRoutes);
 router.use("/mentor", mentorRoutes);
-router.use("/logbook", logbookRoutes); // 🔥 INI YANG HILANG
+router.use("/logbook", logbookRoutes);
+router.use("/laporan-bulanan", laporanBulananRoutes);
+router.use("/laporan-akhir", laporanAkhirRoutes);
 
 export default router;

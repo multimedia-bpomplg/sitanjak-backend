@@ -103,6 +103,9 @@ export const getLogbookByDate = async (req: any, res: Response) => {
       kendala: logbook.kendala,
       keterangan: logbook.keterangan,
       files: logbook.files,
+
+      // ✅ TAMBAHAN
+      approvedByMentor: logbook.approvedByMentor,
     });
   } catch (err) {
     res.status(500).json({

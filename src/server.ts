@@ -31,12 +31,10 @@ app.listen(PORT, async () => {
   console.log("Database   : MongoDB Connected");
   console.log(
     `Mode       : ${
-      process.env.NODE_ENV === "production"
-        ? "PRODUCTION"
-        : "DEVELOPMENT"
+      process.env.NODE_ENV === "production" ? "PRODUCTION" : "DEVELOPMENT"
     }`
   );
   console.log(`Port       : ${PORT}`);
   console.log(`Started At : ${new Date().toLocaleTimeString()}`);
 });
-``
+``;
