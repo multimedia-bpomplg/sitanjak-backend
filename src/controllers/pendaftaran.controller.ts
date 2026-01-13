@@ -43,6 +43,7 @@ export const createPendaftaran = async (req: Request, res: Response) => {
         !p.posisi ||
         !p.asalJenis ||
         !p.asalNama ||
+        !p.jurusan || // ⬅️ TAMBAHAN
         !p.tanggalMulaiMagang ||
         !p.tanggalSelesaiMagang ||
         !p.tempatLahir ||
@@ -68,6 +69,8 @@ export const createPendaftaran = async (req: Request, res: Response) => {
       return {
         nama: p.nama,
         posisi: p.posisi,
+
+        jurusan: p.jurusan, // ✅ PINDAHKAN KE SINI
 
         asal: {
           jenis: p.asalJenis,

@@ -8,6 +8,9 @@ interface IAsal {
 interface IPeserta {
   nama: string;
   posisi: string;
+
+  jurusan: string; // ✅ WAJIB
+
   asal: IAsal;
 
   tanggalMulaiMagang: string;
@@ -45,6 +48,8 @@ const PesertaSchema = new Schema<IPeserta>(
   {
     nama: String,
     posisi: String,
+
+    jurusan: String, // ✅ TAMBAH INI
 
     asal: {
       jenis: String,
