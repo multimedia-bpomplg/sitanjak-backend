@@ -1,19 +1,33 @@
 import { Router } from "express";
-import { upload } from "../middlewares/upload.middleware";
+import {
+  uploadSuratPengantar,
+  uploadSuratBalasan,
+} from "../middlewares/upload.middleware";
 import {
   createPendaftaran,
   getAllPendaftaran,
   cekPendaftaran,
   updateStatus,
+  setMentorPendaftaran,
 } from "../controllers/pendaftaran.controller";
-import { setMentorPendaftaran } from "../controllers/pendaftaran.controller";
 
 const router = Router();
 
-router.post("/", upload.single("surat"), createPendaftaran);
+/* CREATE PENDAFTARAN */
+router.post(
+  "/",
+  uploadSuratPengantar.single("suratPengantar"),
+  createPendaftaran
+);
+
+/* GET */
 router.get("/", getAllPendaftaran);
 router.get("/cek", cekPendaftaran);
-router.put("/:id", upload.single("suratBalasan"), updateStatus);
+
+/* UPDATE STATUS + SURAT BALASAN */
+router.put("/:id", uploadSuratBalasan.single("suratBalasan"), updateStatus);
+
+/* SET MENTOR */
 router.put("/:id/mentor", setMentorPendaftaran);
 
 export default router;

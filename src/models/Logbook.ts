@@ -29,6 +29,11 @@ const LogbookSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    mentorNote: {
+      type: String,
+      default: "",
+    },
   },
 
   { timestamps: true }

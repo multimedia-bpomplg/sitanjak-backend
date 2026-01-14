@@ -10,6 +10,6 @@ const router = Router();
 
 router.get("/", authMiddleware, getLaporanAkhir);
 router.post("/", authMiddleware, createLaporanAkhir);
-router.get("/pdf", authMiddleware, downloadLaporanAkhirPdf); // 🔥 PDF
+router.get("/pdf", downloadLaporanAkhirPdf); // 🔥 PDF
 
 export default router;

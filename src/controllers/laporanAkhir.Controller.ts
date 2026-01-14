@@ -42,14 +42,16 @@ export const createLaporanAkhir = async (req: any, res: Response) => {
   }
 };
 
-/* ================= DOWNLOAD PDF ================= */
-export const downloadLaporanAkhirPdf = async (req: any, res: Response) => {
+/* ================= DOWNLOAD PDF (PUBLIC) ================= */
+export const downloadLaporanAkhirPdf = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    // ⬇️ AMBIL LAPORAN TERAKHIR (atau bisa pakai query)
+    const laporan = await LaporanAkhir.findOne().sort({ createdAt: -1 });
 
-    const laporan = await LaporanAkhir.findOne({ user: userId });
     if (!laporan) {
-      return res.status(404).json({ message: "Laporan akhir tidak ditemukan" });
+      return res.status(404).json({
+        message: "Laporan akhir tidak ditemukan",
+      });
     }
 
     const doc = new PDFDocument({ margin: 50 });
@@ -57,7 +59,7 @@ export const downloadLaporanAkhirPdf = async (req: any, res: Response) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      "attachment; filename=laporan-akhir.pdf"
+      "attachment; filename=Laporan_Akhir_Magang.pdf"
     );
 
     doc.pipe(res);
@@ -74,7 +76,10 @@ export const downloadLaporanAkhirPdf = async (req: any, res: Response) => {
 
     doc.end();
   } catch (err) {
-    res.status(500).json({ message: "Gagal membuat PDF laporan akhir" });
+    console.error(err);
+    res.status(500).json({
+      message: "Gagal membuat PDF laporan akhir",
+    });
   }
 };
 

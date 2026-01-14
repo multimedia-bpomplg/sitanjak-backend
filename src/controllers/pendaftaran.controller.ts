@@ -114,7 +114,7 @@ export const createPendaftaran = async (req: Request, res: Response) => {
       kategori,
       jumlahPeserta: jumlahFix,
       peserta: pesertaFix,
-      suratPengantar: req.file.filename,
+      suratPengantar: `surat-pengantar/${req.file.filename}`,
     });
 
     return res.status(201).json({
@@ -135,7 +135,10 @@ export const createPendaftaran = async (req: Request, res: Response) => {
   ========================= */
 export const getAllPendaftaran = async (_req: Request, res: Response) => {
   try {
-    const data = await Pendaftaran.find().sort({ createdAt: -1 });
+    const data = await Pendaftaran.find()
+      .populate("mentor", "name email posisiMentor")
+      .sort({ createdAt: -1 });
+
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({
@@ -160,7 +163,7 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
 
     const data = await Pendaftaran.findOne({
       "peserta.email": email,
-    });
+    }).populate("mentor", "name email posisiMentor");
 
     if (!data) {
       return res.status(404).json({
@@ -196,7 +199,7 @@ export const updateStatus = async (req: Request, res: Response) => {
     };
 
     if (req.file) {
-      updateData.suratBalasan = req.file.filename;
+      updateData.suratBalasan = `surat-balasan/${req.file.filename}`;
     }
 
     const data = await Pendaftaran.findByIdAndUpdate(

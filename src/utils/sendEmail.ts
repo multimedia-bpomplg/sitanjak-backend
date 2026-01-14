@@ -9,6 +9,10 @@ export const sendEmail = async ({
   subject: string;
   html: string;
 }) => {
+  if (!to) {
+    throw new Error("No recipients defined");
+  }
+
   const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: Number(process.env.EMAIL_PORT),
@@ -20,7 +24,7 @@ export const sendEmail = async ({
   });
 
   await transporter.sendMail({
-    from: `"Admin Magang" <${process.env.EMAIL_USER}>`,
+    from: `"Simaggo Admin" <${process.env.EMAIL_USER}>`,
     to,
     subject,
     html,

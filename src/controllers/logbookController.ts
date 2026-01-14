@@ -18,7 +18,9 @@ export const createLogbook = async (req: any, res: Response) => {
     }
 
     const files =
-      (req.files as Express.Multer.File[])?.map((f) => f.path) || [];
+      (req.files as Express.Multer.File[])?.map(
+        (f) => `uploads/logbook/${f.filename}`
+      ) || [];
 
     const logbook = await Logbook.create({
       user: userId,
@@ -106,6 +108,7 @@ export const getLogbookByDate = async (req: any, res: Response) => {
 
       // ✅ TAMBAHAN
       approvedByMentor: logbook.approvedByMentor,
+      mentorNote: logbook.mentorNote, // ✅ TAMBAHAN
     });
   } catch (err) {
     res.status(500).json({

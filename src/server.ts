@@ -15,11 +15,11 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-/* API ROUTES */
-app.use("/api", router);
-
 /* STATIC FILE */
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+/* API ROUTES */
+app.use("/api", router);
 
 /* START SERVER */
 app.listen(PORT, async () => {

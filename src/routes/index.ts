@@ -6,6 +6,7 @@ import mentorRoutes from "./mentor.route";
 import logbookRoutes from "./logbook.routes";
 import laporanBulananRoutes from "./laporanBulanan.routes";
 import laporanAkhirRoutes from "./laporanAkhir.routes";
+import pesertaRoutes from "./peserta.route";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/mentor", mentorRoutes);
 router.use("/logbook", logbookRoutes);
 router.use("/laporan-bulanan", laporanBulananRoutes);
 router.use("/laporan-akhir", laporanAkhirRoutes);
+router.use("/peserta", pesertaRoutes);
 
 export default router;
