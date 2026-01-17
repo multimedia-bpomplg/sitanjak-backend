@@ -12,6 +12,7 @@ interface IPeserta {
   jurusan: string; // ✅ WAJIB
 
   asal: IAsal;
+  mentor?: mongoose.Types.ObjectId;
 
   tanggalMulaiMagang: string;
   tanggalSelesaiMagang: string;
@@ -56,6 +57,12 @@ const PesertaSchema = new Schema<IPeserta>(
       nama: String,
     },
 
+    mentor: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     tanggalMulaiMagang: String,
     tanggalSelesaiMagang: String,
 
@@ -80,12 +87,6 @@ const PendaftaranSchema = new Schema(
     kategori: String,
     jumlahPeserta: Number,
     peserta: [PesertaSchema],
-
-    mentor: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
 
     suratPengantar: String,
     suratBalasan: String,

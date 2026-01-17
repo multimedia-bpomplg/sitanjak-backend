@@ -92,6 +92,8 @@ export const createPendaftaran = async (req: Request, res: Response) => {
 
         email: p.email,
         wa: p.wa,
+
+        mentor: null,
       };
     });
 
@@ -136,7 +138,7 @@ export const createPendaftaran = async (req: Request, res: Response) => {
 export const getAllPendaftaran = async (_req: Request, res: Response) => {
   try {
     const data = await Pendaftaran.find()
-      .populate("mentor", "name email posisiMentor")
+      .populate("peserta.mentor", "name email posisiMentor")
       .sort({ createdAt: -1 });
 
     return res.json(data);
@@ -270,5 +272,50 @@ export const setMentorPendaftaran = async (req: Request, res: Response) => {
     return res.status(500).json({
       message: "Gagal menambahkan mentor",
     });
+  }
+};
+
+/* =========================
+    SET MENTOR 1 PER PESERTA
+  ========================= */
+export const setMentorPeserta = async (req: Request, res: Response) => {
+  try {
+    const { email, mentorId } = req.body;
+
+    if (!email || !mentorId) {
+      return res.status(400).json({ message: "Email & mentorId wajib" });
+    }
+
+    const mentor = await User.findById(mentorId);
+    if (!mentor) {
+      return res.status(404).json({ message: "Mentor tidak ditemukan" });
+    }
+
+    const pendaftaran = await Pendaftaran.findOne({
+      _id: req.params.id,
+      "peserta.email": email,
+    });
+
+    if (!pendaftaran) {
+      return res.status(404).json({ message: "Peserta tidak ditemukan" });
+    }
+
+    const peserta = pendaftaran.peserta.find((p: any) => p.email === email);
+
+    peserta.mentor = mentorId;
+
+    await pendaftaran.save();
+
+    const populated = await Pendaftaran.findById(req.params.id).populate(
+      "peserta.mentor",
+      "name email posisiMentor"
+    );
+
+    return res.json({
+      message: "Mentor peserta berhasil disimpan",
+      data: populated,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Gagal set mentor peserta" });
   }
 };

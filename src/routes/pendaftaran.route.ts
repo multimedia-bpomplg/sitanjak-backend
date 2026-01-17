@@ -8,26 +8,26 @@ import {
   getAllPendaftaran,
   cekPendaftaran,
   updateStatus,
-  setMentorPendaftaran,
+  setMentorPeserta,
 } from "../controllers/pendaftaran.controller";
 
 const router = Router();
 
-/* CREATE PENDAFTARAN */
+/* CREATE */
 router.post(
   "/",
   uploadSuratPengantar.single("suratPengantar"),
   createPendaftaran
 );
 
-/* GET */
+/* READ */
 router.get("/", getAllPendaftaran);
 router.get("/cek", cekPendaftaran);
 
-/* UPDATE STATUS + SURAT BALASAN */
+/* UPDATE STATUS */
 router.put("/:id", uploadSuratBalasan.single("suratBalasan"), updateStatus);
 
-/* SET MENTOR */
-router.put("/:id/mentor", setMentorPendaftaran);
+/* SET MENTOR PER PESERTA */
+router.put("/:id/mentor-peserta", setMentorPeserta);
 
 export default router;
