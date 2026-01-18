@@ -165,7 +165,7 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
 
     const data = await Pendaftaran.findOne({
       "peserta.email": email,
-    }).populate("mentor", "name email posisiMentor");
+    }).populate("peserta.mentor", "name email posisiMentor");
 
     if (!data) {
       return res.status(404).json({
@@ -175,6 +175,7 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
 
     return res.json(data);
   } catch (err: any) {
+    console.error("[CEK PENDAFTARAN ERROR]", err);
     return res.status(500).json({
       message: "Gagal mengecek pendaftaran",
       error: err.message,

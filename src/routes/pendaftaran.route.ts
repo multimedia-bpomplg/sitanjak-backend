@@ -21,8 +21,8 @@ router.post(
 );
 
 /* READ */
-router.get("/", getAllPendaftaran);
 router.get("/cek", cekPendaftaran);
+router.get("/", getAllPendaftaran);
 
 /* UPDATE STATUS */
 router.put("/:id", uploadSuratBalasan.single("suratBalasan"), updateStatus);
