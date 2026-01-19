@@ -9,41 +9,31 @@ const LaporanBulananSchema = new mongoose.Schema(
     },
 
     month: {
-      type: String, // format: YYYY-MM
+      type: String, // YYYY-MM
       required: true,
     },
 
-    ringkasan: {
-      type: String,
-      required: true,
-    },
+    ringkasan: { type: String, required: true },
+    pencapaian: { type: String, required: true },
+    kendala: { type: String, required: true },
+    rencana: { type: String, required: true },
 
-    pencapaian: {
-      type: String,
-      required: true,
-    },
-
-    kendala: {
-      type: String,
-      required: true,
-    },
-
-    rencana: {
-      type: String,
-      required: true,
-    },
-
-    // 🔔 approval mentor (future-ready)
+    /* ===== APPROVAL MENTOR ===== */
     approvedByMentor: {
       type: Boolean,
       default: false,
+    },
+
+    mentorNote: {
+      type: String,
+      default: "",
     },
 
     approvedAt: {
       type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 /* 🔒 1 USER 1 LAPORAN PER BULAN */

@@ -69,3 +69,37 @@ export const getRiwayatLaporanBulanan = async (req: any, res: Response) => {
     });
   }
 };
+
+/* ================= ACC laporan Bulanan ================= */
+export const approveLaporanBulanan = async (req: any, res: Response) => {
+  try {
+    const mentorId = req.user.id;
+    const { id } = req.params;
+    const { mentorNote } = req.body;
+
+    const laporan = await LaporanBulanan.findById(id).populate("user");
+    if (!laporan) {
+      return res.status(404).json({ message: "Laporan tidak ditemukan" });
+    }
+
+    const valid = await Pendaftaran.findOne({
+      "peserta.email": (laporan.user as any).email,
+      "peserta.mentor": mentorId,
+    });
+
+    if (!valid) {
+      return res.status(403).json({
+        message: "Anda bukan mentor peserta ini",
+      });
+    }
+
+    laporan.approvedByMentor = true;
+    laporan.mentorNote = mentorNote;
+    laporan.approvedAt = new Date();
+    await laporan.save();
+
+    res.json({ message: "Disetujui", data: laporan });
+  } catch {
+    res.status(500).json({ message: "Gagal approve laporan bulanan" });
+  }
+};

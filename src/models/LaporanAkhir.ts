@@ -16,12 +16,22 @@ const LaporanAkhirSchema = new mongoose.Schema(
     kesimpulan: { type: String, required: true },
     saran: { type: String },
 
+    /* ===== APPROVAL MENTOR ===== */
     approvedByMentor: {
       type: Boolean,
       default: false,
     },
+
+    mentorNote: {
+      type: String,
+      default: "",
+    },
+
+    approvedAt: {
+      type: Date,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("LaporanAkhir", LaporanAkhirSchema);

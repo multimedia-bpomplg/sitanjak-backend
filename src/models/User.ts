@@ -28,15 +28,11 @@ const userSchema: Schema = new Schema(
       required: false,
     },
 
-    pesertaBimbingan: {
-      type: [String],
-      default: [],
-    },
     passwordChangedAt: {
       type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.models.User ||

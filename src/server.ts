@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 /* STATIC FILE */
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/api/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 /* API ROUTES */
 app.use("/api", router);
@@ -32,7 +32,7 @@ app.listen(PORT, async () => {
   console.log(
     `Mode       : ${
       process.env.NODE_ENV === "production" ? "PRODUCTION" : "DEVELOPMENT"
-    }`
+    }`,
   );
   console.log(`Port       : ${PORT}`);
   console.log(`Started At : ${new Date().toLocaleTimeString()}`);

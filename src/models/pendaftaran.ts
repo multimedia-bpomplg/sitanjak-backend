@@ -6,6 +6,7 @@ interface IAsal {
 }
 
 interface IPeserta {
+  user?: mongoose.Types.ObjectId; // ✅ TAMBAHAN WAJIB
   nama: string;
   posisi: string;
 
@@ -47,10 +48,15 @@ export interface IPendaftaran extends Document {
 
 const PesertaSchema = new Schema<IPeserta>(
   {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     nama: String,
     posisi: String,
-
-    jurusan: String, // ✅ TAMBAH INI
+    jurusan: String,
 
     asal: {
       jenis: String,
@@ -79,7 +85,7 @@ const PesertaSchema = new Schema<IPeserta>(
     email: String,
     wa: String,
   },
-  { _id: false }
+  { _id: false },
 );
 
 const PendaftaranSchema = new Schema(
@@ -99,7 +105,7 @@ const PendaftaranSchema = new Schema(
 
     jawabanAdmin: String,
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model<IPendaftaran>("Pendaftaran", PendaftaranSchema);

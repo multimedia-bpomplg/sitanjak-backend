@@ -16,7 +16,7 @@ export const roleMiddleware = (allowedRoles: string[]) => {
     }
 
     const hasAccess = user.roles.some((role: string) =>
-      allowedRoles.includes(role)
+      allowedRoles.includes(role),
     );
 
     if (!hasAccess) {
