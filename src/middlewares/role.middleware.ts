@@ -1,10 +1,6 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "./auth.middleware";
 
-/**
- * Middleware Role Based Access Control
- * @param allowedRoles role yang diizinkan
- */
 export const roleMiddleware = (allowedRoles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     const user = req.user;
@@ -15,13 +11,11 @@ export const roleMiddleware = (allowedRoles: string[]) => {
       });
     }
 
-    const hasAccess = user.roles.some((role: string) =>
-      allowedRoles.includes(role),
-    );
+    const hasAccess = user.roles.some((role) => allowedRoles.includes(role));
 
     if (!hasAccess) {
       return res.status(403).json({
-        message: "Anda tidak memiliki akses ke resource ini",
+        message: "Anda tidak memiliki akses",
       });
     }
 

@@ -9,6 +9,9 @@ export interface IUser extends Document {
   jurusan: string;
   posisiMentor?: string;
   passwordChangedAt?: Date;
+
+  // 🔥 TAMBAHAN
+  isSuperAccess?: boolean;
 }
 
 const userSchema: Schema = new Schema(
@@ -30,6 +33,12 @@ const userSchema: Schema = new Schema(
 
     passwordChangedAt: {
       type: Date,
+    },
+
+    // 🔥 ADMIN KHUSUS
+    isSuperAccess: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true },

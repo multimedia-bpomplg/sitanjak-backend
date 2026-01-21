@@ -24,7 +24,15 @@ const LogbookSchema = new mongoose.Schema(
     kendala: String,
     keterangan: String,
 
-    files: [String], // simpan PATH / URL foto
+    files: [String],
+
+    // 🔥 STATUS PERSETUJUAN MENTOR (DITAMBAHKAN)
+    approvalStatus: {
+      type: String,
+      enum: ["menunggu", "disetujui", "ditolak"],
+      default: "menunggu",
+    },
+
     approvedByMentor: {
       type: Boolean,
       default: false,
@@ -34,9 +42,25 @@ const LogbookSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    // 🔥 TANGGAL APPROVAL
+    approvedAt: {
+      type: Date,
+    },
+
+    // 🔥 MENTOR YANG MENYETUJUI
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    isFinalized: {
+      type: Boolean,
+      default: false,
+    },
   },
 
-  { timestamps: true }
+  { timestamps: true },
 );
 
 /* 🔒 1 USER 1 LOGBOOK PER TANGGAL */

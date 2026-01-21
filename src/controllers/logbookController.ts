@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import Logbook from "../models/Logbook";
 import Pendaftaran from "../models/pendaftaran";
+import User from "../models/User"; // ✅ TAMBAH IMPORT INI
+import mongoose from "mongoose"; // ✅ TAMBAHKAN IMPORT INI
 
 /* ================= CREATE ================= */
 export const createLogbook = async (req: any, res: Response) => {
@@ -23,10 +25,13 @@ export const createLogbook = async (req: any, res: Response) => {
         (f) => `uploads/logbook/${f.filename}`,
       ) || [];
 
+    // ✅ TAMBAH STATUS APPROVAL
     const logbook = await Logbook.create({
       user: userId,
       ...req.body,
       files,
+      approvalStatus: "menunggu", // Status default
+      approvedByMentor: false,
     });
 
     res.status(201).json(logbook);
@@ -47,7 +52,7 @@ export const getFilledDates = async (req: any, res: Response) => {
       result[l.date] = l.status;
     });
 
-    res.json(result); // ⬅️ OBJECT, BUKAN ARRAY
+    res.json(result);
   } catch (err) {
     res.status(500).json({
       message: "Gagal mengambil tanggal logbook",
@@ -82,6 +87,7 @@ export const getSummary = async (req: any, res: Response) => {
     tidakHadirTanpaKeterangan,
   });
 };
+
 /* ================= GET LOGBOOK BY DATE ================= */
 export const getLogbookByDate = async (req: any, res: Response) => {
   try {
@@ -106,10 +112,11 @@ export const getLogbookByDate = async (req: any, res: Response) => {
       kendala: logbook.kendala,
       keterangan: logbook.keterangan,
       files: logbook.files,
-
-      // ✅ TAMBAHAN
       approvedByMentor: logbook.approvedByMentor,
-      mentorNote: logbook.mentorNote, // ✅ TAMBAHAN
+      mentorNote: logbook.mentorNote,
+      // ✅ TAMBAH INI
+      approvalStatus: logbook.approvalStatus || "menunggu",
+      approvedAt: logbook.approvedAt,
     });
   } catch (err) {
     res.status(500).json({
@@ -124,12 +131,29 @@ export const getLogbookByPeserta = async (req: any, res: Response) => {
     const mentorId = req.user.id;
     const { userId } = req.params;
 
-    // 🔒 pastikan peserta ini milik mentor
+    // 🔥 VALIDASI: Pastikan userId valid
+    if (
+      !userId ||
+      userId === "undefined" ||
+      !mongoose.Types.ObjectId.isValid(userId)
+    ) {
+      return res.status(400).json({
+        message: "User ID tidak valid",
+      });
+    }
+
+    // Cari peserta untuk validasi
+    const peserta = await User.findById(userId);
+    if (!peserta) {
+      return res.status(404).json({
+        message: "Peserta tidak ditemukan",
+      });
+    }
+
+    // 🔒 Pastikan peserta ini milik mentor
     const valid = await Pendaftaran.findOne({
+      "peserta.email": peserta.email,
       "peserta.mentor": mentorId,
-      peserta: {
-        $elemMatch: { email: { $exists: true } },
-      },
     });
 
     if (!valid) {
@@ -146,14 +170,44 @@ export const getLogbookByPeserta = async (req: any, res: Response) => {
   }
 };
 
+/* ===== GET LOGBOOK PESERTA BY DATE - KASIH INFO FINAL ===== */
 export const getLogbookPesertaByDate = async (req: any, res: Response) => {
   try {
+    const mentorId = req.user.id;
     const { userId, date } = req.params;
 
+    // Validasi
+    if (!userId || userId === "undefined") {
+      return res.status(400).json({
+        message: "User ID tidak valid",
+      });
+    }
+
+    // Cari peserta
+    const peserta = await User.findById(userId);
+    if (!peserta) {
+      return res.status(404).json({
+        message: "Peserta tidak ditemukan",
+      });
+    }
+
+    // Validasi mentor
+    const valid = await Pendaftaran.findOne({
+      "peserta.email": peserta.email,
+      "peserta.mentor": mentorId,
+    });
+
+    if (!valid) {
+      return res.status(403).json({
+        message: "Anda tidak berhak mengakses logbook peserta ini",
+      });
+    }
+
+    // Cari logbook
     const logbook = await Logbook.findOne({
       user: userId,
       date,
-    });
+    }).populate("approvedBy", "name email");
 
     if (!logbook) {
       return res.status(404).json({
@@ -161,7 +215,11 @@ export const getLogbookPesertaByDate = async (req: any, res: Response) => {
       });
     }
 
-    res.json(logbook);
+    res.json({
+      ...logbook.toObject(),
+      canBeEdited:
+        !logbook.isFinalized && logbook.approvalStatus === "menunggu",
+    });
   } catch (err) {
     console.error("[GET LOGBOOK PESERTA BY DATE]", err);
     res.status(500).json({
@@ -170,35 +228,93 @@ export const getLogbookPesertaByDate = async (req: any, res: Response) => {
   }
 };
 
-/* ===== APPROVE LOGBOOK (MENTOR) ===== */
-export const approveLogbook = async (req, res) => {
+/* ===== APPROVE LOGBOOK (MENTOR) - HANYA SEKALI ===== */
+export const approveLogbook = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { approvedByMentor, mentorNote } = req.body;
+    const { approvalStatus, mentorNote } = req.body;
+    const mentorId = (req as any).user.id;
 
-    const logbook = await Logbook.findById(id);
+    // Cari logbook
+    const logbook = await Logbook.findById(id).populate("user", "name email");
 
     if (!logbook) {
       return res.status(404).json({ message: "Logbook tidak ditemukan" });
     }
 
-    logbook.approvedByMentor = approvedByMentor;
+    // 🔥 CEK 1: Apakah sudah difinalisasi (hanya sekali)
+    if (logbook.isFinalized) {
+      return res.status(400).json({
+        message: "Logbook sudah diproses dan tidak dapat diubah lagi",
+        currentStatus: logbook.approvalStatus,
+        finalizedAt: logbook.finalizedAt,
+      });
+    }
+
+    // 🔥 CEK 2: Apakah sudah ada status (selain menunggu)
+    if (logbook.approvalStatus !== "menunggu") {
+      return res.status(400).json({
+        message: `Logbook sudah ${logbook.approvalStatus === "disetujui" ? "disetujui" : "ditolak"} sebelumnya`,
+        currentStatus: logbook.approvalStatus,
+        approvedAt: logbook.approvedAt,
+      });
+    }
+
+    // 🔥 VALIDASI: Hanya mentor yang bisa approve logbook peserta bimbingannya
+    const isMentorOfPeserta = await Pendaftaran.findOne({
+      "peserta.email": (logbook.user as any).email,
+      "peserta.mentor": mentorId,
+    });
+
+    if (!isMentorOfPeserta) {
+      return res.status(403).json({
+        message: "Anda tidak berhak mengubah status logbook peserta ini",
+      });
+    }
+
+    // 🔥 UPDATE STATUS DENGAN FINALIZATION
+    logbook.approvalStatus = approvalStatus;
     logbook.mentorNote = mentorNote || "";
+    logbook.approvedByMentor = approvalStatus === "disetujui";
+    logbook.approvedAt = new Date();
+    logbook.approvedBy = mentorId;
+
+    // 🔥 TANDAI SUDAH FINAL (HANYA SEKALI)
+    logbook.isFinalized = true;
+    logbook.finalizedAt = new Date();
 
     await logbook.save();
 
+    // 🔥 RESPONSE
+    const message =
+      approvalStatus === "disetujui"
+        ? "Logbook berhasil disetujui"
+        : approvalStatus === "ditolak"
+          ? "Logbook berhasil ditolak"
+          : "Status logbook diubah";
+
     res.json({
-      message: approvedByMentor
-        ? "Logbook disetujui mentor"
-        : "Logbook ditolak mentor",
-      logbook,
+      success: true,
+      message,
+      logbook: {
+        ...logbook.toObject(),
+        approvalStatus,
+        approvedByMentor: logbook.approvedByMentor,
+        mentorNote: logbook.mentorNote,
+        isFinalized: true,
+        finalizedAt: logbook.finalizedAt,
+      },
     });
   } catch (err) {
     console.error("[APPROVE LOGBOOK]", err);
-    res.status(500).json({ message: "Gagal memproses logbook" });
+    res.status(500).json({
+      success: false,
+      message: "Gagal memproses logbook",
+    });
   }
 };
 
+/* ===== GET LOGBOOK BY PESERTA EMAIL ===== */
 export const getLogbookByPesertaByEmail = async (req: any, res: Response) => {
   try {
     const mentorId = req.user.id;
@@ -216,8 +332,14 @@ export const getLogbookByPesertaByEmail = async (req: any, res: Response) => {
       });
     }
 
-    // ambil logbook via email → USER ID (kalau ada)
-    const logs = await Logbook.find({ email }).sort({ date: -1 });
+    // Cari user dengan email tersebut
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User tidak ditemukan" });
+    }
+
+    // ambil logbook berdasarkan user ID
+    const logs = await Logbook.find({ user: user._id }).sort({ date: -1 });
 
     res.json(logs);
   } catch (err) {

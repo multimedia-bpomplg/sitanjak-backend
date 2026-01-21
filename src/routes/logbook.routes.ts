@@ -7,11 +7,12 @@ import {
   getLogbookByPeserta,
   approveLogbook,
   getLogbookPesertaByDate,
-  getLogbookByPesertaByEmail, // 🔑 WAJIB
+  getLogbookByPesertaByEmail,
 } from "../controllers/logbookController";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
 import { uploadLogbook } from "../middlewares/uploadLogbook.middleware";
+import { checkLogbookFinalized } from "../middlewares/logbookFinalized.middleware";
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.post(
   "/",
   authMiddleware,
   uploadLogbook.array("files", 3),
-  createLogbook,
+  createLogbook, // ✅ HAPUS KOMA DI SINI
 );
 
 /* FILLED DATES */
@@ -41,7 +42,7 @@ router.get(
   "/mentor/peserta/:userId",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  getLogbookByPeserta,
+  getLogbookByPeserta, // ✅ HAPUS KOMA DI SINI
 );
 
 /* APPROVE LOGBOOK */
@@ -49,26 +50,31 @@ router.put(
   "/mentor/approve/:id",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  approveLogbook,
+  approveLogbook, // ✅ HAPUS KOMA DI SINI
 );
 
+/* GET LOGBOOK PESERTA BY DATE */
 router.get(
   "/mentor/peserta/:userId/date/:date",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  getLogbookPesertaByDate,
+  getLogbookPesertaByDate, // ✅ HAPUS KOMA DI SINI
 );
 
+/* GET LOGBOOK PESERTA BY EMAIL */
 router.get(
   "/mentor/peserta/email/:email",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  getLogbookByPesertaByEmail,
+  getLogbookByPesertaByEmail, // ✅ HAPUS KOMA DI SINI
 );
 
-router.get(
-  "/logbook/peserta/:userId/date/:date",
+router.put(
+  "/mentor/approve/:id",
   authMiddleware,
-  getLogbookPesertaByDate,
+  roleMiddleware(["mentor"]),
+  checkLogbookFinalized, // ✅ TAMBAH MIDDLEWARE INI
+  approveLogbook,
 );
+
 export default router;

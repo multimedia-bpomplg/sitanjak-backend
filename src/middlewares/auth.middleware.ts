@@ -3,7 +3,12 @@ import jwt from "jsonwebtoken";
 import User from "../models/User";
 
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: {
+    id: string;
+    email: string;
+    roles: string[];
+    isSuperAccess: boolean;
+  };
 }
 
 export const authMiddleware = async (
@@ -22,7 +27,6 @@ export const authMiddleware = async (
   try {
     const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
 
-    // 🔥 AMBIL USER DARI DB + ROLE
     const user = await User.findById(decoded.id).populate("roles");
 
     if (!user) {
@@ -42,11 +46,11 @@ export const authMiddleware = async (
       }
     }
 
-    // ✅ SIMPAN USER DB (BUKAN PAYLOAD)
     req.user = {
       id: user._id.toString(),
       email: user.email,
       roles: user.roles.map((r: any) => r.name),
+      isSuperAccess: user.isSuperAccess ?? false,
     };
 
     next();
