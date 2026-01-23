@@ -1,3 +1,4 @@
+// models/LaporanAkhir.ts
 import mongoose from "mongoose";
 
 const LaporanAkhirSchema = new mongoose.Schema(
@@ -16,10 +17,18 @@ const LaporanAkhirSchema = new mongoose.Schema(
     kesimpulan: { type: String, required: true },
     saran: { type: String },
 
+    /* ===== STATUS LAPORAN ===== */
+    status: {
+      type: String,
+      enum: ["Menunggu", "Disetujui", "Ditolak", "Revisi"],
+      default: "Menunggu",
+    },
+
     /* ===== APPROVAL MENTOR ===== */
     approvedByMentor: {
-      type: Boolean,
-      default: false,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
     mentorNote: {

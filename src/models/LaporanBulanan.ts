@@ -1,3 +1,4 @@
+// models/LaporanBulanan.ts
 import mongoose from "mongoose";
 
 const LaporanBulananSchema = new mongoose.Schema(
@@ -18,15 +19,24 @@ const LaporanBulananSchema = new mongoose.Schema(
     kendala: { type: String, required: true },
     rencana: { type: String, required: true },
 
-    /* ===== APPROVAL MENTOR ===== */
-    approvedByMentor: {
-      type: Boolean,
-      default: false,
+    /* ===== STATUS LAPORAN ===== */
+    status: {
+      type: String,
+      enum: ["Menunggu", "Disetujui", "Ditolak", "Perbaiki"],
+      default: "Menunggu",
     },
 
+    /* ===== KOMENTAR MENTOR ===== */
     mentorNote: {
       type: String,
       default: "",
+    },
+
+    /* ===== APPROVAL MENTOR ===== */
+    approvedByMentor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
     approvedAt: {
