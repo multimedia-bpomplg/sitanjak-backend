@@ -19,6 +19,14 @@ import {
   aktifkanAdmin,
 } from "../controllers/adminController";
 import { updatePosisiPeserta } from "../controllers/superadminController";
+import {
+  getAllLogbook,
+  superadminApproveLogbook,
+  enableMissedDay,
+} from "../controllers/superadminLogbookController";
+import { getPesertaDisetujui } from "../controllers/superadminPesertaController";
+import { getAllLaporanAkhir } from "../controllers/superadminLaporanAkhirController";
+import { getAllLaporanBulanan } from "../controllers/superadminLaporanBulananController";
 
 const router = Router();
 
@@ -100,6 +108,50 @@ router.put(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   updatePosisiPeserta,
+);
+
+/* ================= LOGBOOK ================= */
+router.get(
+  "/logbook",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  getAllLogbook,
+);
+router.put(
+  "/logbook/:id/approve",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  superadminApproveLogbook,
+);
+router.post(
+  "/logbook/enable-missed-day",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  enableMissedDay,
+);
+
+/* ================= PESERTA ================= */
+router.get(
+  "/peserta/disetujui",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  getPesertaDisetujui,
+);
+
+/* ================= LAPORAN AKHIR ================= */
+router.get(
+  "/laporan-akhir",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  getAllLaporanAkhir,
+);
+
+/* ================= LAPORAN BULANAN ================= */
+router.get(
+  "/laporan-bulanan",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  getAllLaporanBulanan,
 );
 
 export default router;

@@ -15,7 +15,8 @@ export const checkLogbookFinalized = async (
       return res.status(404).json({ message: "Logbook tidak ditemukan" });
     }
 
-    if (logbook.isFinalized) {
+    // 🔥 IZINKAN JIKA STATUS REVISI
+    if (logbook.isFinalized && logbook.approvalStatus !== "revisi") {
       return res.status(400).json({
         message: "Logbook sudah diproses dan tidak dapat diubah",
         status: logbook.approvalStatus,
