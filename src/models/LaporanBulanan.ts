@@ -32,6 +32,26 @@ const LaporanBulananSchema = new mongoose.Schema(
       default: "",
     },
 
+    /* ===== STATUS REVISI ===== */
+    isRevisi: {
+      type: Boolean,
+      default: false,
+    },
+
+    revisiNote: {
+      type: String,
+      default: "",
+    },
+
+    revisiRequestedAt: {
+      type: Date,
+    },
+
+    revisiCompleted: {
+      type: Boolean,
+      default: true,
+    },
+
     /* ===== APPROVAL MENTOR ===== */
     approvedByMentor: {
       type: mongoose.Schema.Types.ObjectId,
