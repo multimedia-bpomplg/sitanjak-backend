@@ -8,6 +8,7 @@ import laporanBulananRoutes from "./laporanBulanan.routes";
 import laporanAkhirRoutes from "./laporanAkhir.routes";
 import pesertaRoutes from "./peserta.route";
 import userRoutes from "./userRoutes";
+import overviewRoutes from "./overview.routes";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use("/laporan-bulanan", laporanBulananRoutes);
 router.use("/laporan-akhir", laporanAkhirRoutes);
 router.use("/peserta", pesertaRoutes);
 router.use("/users", userRoutes);
+router.use("/oversistem", overviewRoutes);
 
 export default router;
