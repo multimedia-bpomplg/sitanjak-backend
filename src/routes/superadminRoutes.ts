@@ -1,3 +1,4 @@
+// routes/superadminRoutes.ts
 import { Router } from "express";
 import {
   buatAkunPeserta,
@@ -17,6 +18,7 @@ import {
   getAdmin,
   nonaktifkanAdmin,
   aktifkanAdmin,
+  setSuperAccess,
 } from "../controllers/adminController";
 import { updatePosisiPeserta } from "../controllers/superadminController";
 import {
@@ -30,6 +32,9 @@ import { getAllLaporanBulanan } from "../controllers/superadminLaporanBulananCon
 
 const router = Router();
 
+/* ================= ROUTES UNTUK SUPERADMIN & ADMIN DENGAN SUPER ACCESS ================= */
+
+// ✅ Routes yang bisa diakses admin dengan super access
 router.post(
   "/buat-peserta",
   authMiddleware,
@@ -44,6 +49,7 @@ router.get(
   getPeserta,
 );
 
+// ✅ Tetap hanya superadmin yang bisa nonaktifkan/aktifkan
 router.patch(
   "/peserta/:id/nonaktif",
   authMiddleware,
@@ -65,6 +71,16 @@ router.get(
   getMentor,
 );
 
+// ✅ IMPORT CONTROLLER MENTOR
+import { buatMentor } from "../controllers/mentorController";
+
+router.post(
+  "/buat-mentor",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  buatMentor,
+);
+
 router.patch(
   "/mentor/:id/nonaktif",
   authMiddleware,
@@ -79,6 +95,7 @@ router.patch(
   aktifkanMentor,
 );
 
+// ✅ Routes hanya untuk superadmin
 router.post(
   "/buat-admin",
   authMiddleware,
@@ -102,6 +119,14 @@ router.patch(
   aktifkanAdmin,
 );
 
+/* ================= UPDATE SUPER ACCESS ================= */
+router.patch(
+  "/admin/:id/super-access",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  setSuperAccess,
+);
+
 /* ================= UPDATE POSISI PESERTA ================= */
 router.put(
   "/pendaftaran/:id/posisi",
@@ -114,19 +139,21 @@ router.put(
 router.get(
   "/logbook",
   authMiddleware,
-  roleMiddleware(["superadmin"]),
+  roleMiddleware(["admin", "superadmin"]),
   getAllLogbook,
 );
+
 router.put(
   "/logbook/:id/approve",
   authMiddleware,
-  roleMiddleware(["superadmin"]),
+  roleMiddleware(["admin", "superadmin"]),
   superadminApproveLogbook,
 );
+
 router.post(
   "/logbook/enable-missed-day",
   authMiddleware,
-  roleMiddleware(["superadmin"]),
+  roleMiddleware(["admin", "superadmin"]),
   enableMissedDay,
 );
 
@@ -134,7 +161,7 @@ router.post(
 router.get(
   "/peserta/disetujui",
   authMiddleware,
-  roleMiddleware(["superadmin"]),
+  roleMiddleware(["admin", "superadmin"]),
   getPesertaDisetujui,
 );
 
@@ -142,7 +169,7 @@ router.get(
 router.get(
   "/laporan-akhir",
   authMiddleware,
-  roleMiddleware(["superadmin"]),
+  roleMiddleware(["admin", "superadmin"]),
   getAllLaporanAkhir,
 );
 
@@ -150,7 +177,7 @@ router.get(
 router.get(
   "/laporan-bulanan",
   authMiddleware,
-  roleMiddleware(["superadmin"]),
+  roleMiddleware(["admin", "superadmin"]),
   getAllLaporanBulanan,
 );
 

@@ -10,24 +10,42 @@ import {
   updateStatus,
   setMentorPeserta,
 } from "../controllers/pendaftaran.controller";
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { roleMiddleware } from "../middlewares/role.middleware";
 
 const router = Router();
 
-/* CREATE */
+/* CREATE - Publik (untuk form pendaftaran) */
 router.post(
   "/",
   uploadSuratPengantar.single("suratPengantar"),
-  createPendaftaran
+  createPendaftaran,
 );
 
-/* READ */
+/* READ - Hanya admin/superadmin */
 router.get("/cek", cekPendaftaran);
-router.get("/", getAllPendaftaran);
+router.get(
+  "/",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getAllPendaftaran,
+);
 
-/* UPDATE STATUS */
-router.put("/:id", uploadSuratBalasan.single("suratBalasan"), updateStatus);
+/* UPDATE STATUS - Hanya admin/superadmin */
+router.put(
+  "/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  uploadSuratBalasan.single("suratBalasan"),
+  updateStatus,
+);
 
-/* SET MENTOR PER PESERTA */
-router.put("/:id/mentor-peserta", setMentorPeserta);
+/* SET MENTOR PER PESERTA - Hanya admin/superadmin */
+router.put(
+  "/:id/mentor-peserta",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  setMentorPeserta,
+);
 
 export default router;

@@ -46,15 +46,16 @@ export const authMiddleware = async (
       }
     }
 
+    // ✅ AMBIL isSuperAccess DARI DATABASE
     req.user = {
       id: user._id.toString(),
       email: user.email,
       roles: user.roles.map((r: any) => r.name),
-      isSuperAccess: user.isSuperAccess ?? false,
+      isSuperAccess: user.isSuperAccess || false,
     };
 
     next();
-  } catch (error) {
+  } catch {
     return res.status(401).json({ message: "Token tidak valid" });
   }
 };

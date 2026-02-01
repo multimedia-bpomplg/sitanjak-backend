@@ -1,5 +1,7 @@
+// controllers/AdminController.ts
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Role from "../models/Role";
 import { sendEmail } from "../utils/sendEmail";
@@ -43,6 +45,7 @@ export const buatAdmin = async (req: Request, res: Response) => {
       password: hashedPassword,
       roles: [roleAdmin._id],
       status: "Aktif",
+      isSuperAccess: false, // Default false
     });
 
     /* KIRIM EMAIL */
@@ -63,6 +66,7 @@ export const buatAdmin = async (req: Request, res: Response) => {
         name: admin.name,
         email: admin.email,
         status: admin.status,
+        isSuperAccess: admin.isSuperAccess,
       },
     });
   } catch (error) {
@@ -81,7 +85,7 @@ export const getAdmin = async (_req: Request, res: Response) => {
 
     const admin = await User.find({
       roles: roleAdmin._id,
-    }).select("name email status createdAt");
+    }).select("name email status isSuperAccess createdAt");
 
     res.json(admin);
   } catch (error) {
@@ -114,5 +118,55 @@ export const aktifkanAdmin = async (req: Request, res: Response) => {
     res.json({ message: "Akun admin berhasil diaktifkan" });
   } catch {
     res.status(500).json({ message: "Gagal mengaktifkan akun admin" });
+  }
+};
+
+/* ================= SET SUPER ACCESS ================= */
+export const setSuperAccess = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isSuperAccess } = req.body;
+
+    const admin = await User.findByIdAndUpdate(
+      id,
+      { isSuperAccess },
+      { new: true },
+    ).select("name email status isSuperAccess");
+
+    if (!admin) {
+      return res.status(404).json({
+        message: "Admin tidak ditemukan",
+      });
+    }
+
+    // GENERATE TOKEN BARU JIKA PERLU
+    if (isSuperAccess) {
+      const token = jwt.sign(
+        {
+          id: admin._id,
+          email: admin.email,
+          roles: ["admin"],
+          isSuperAccess: true,
+        },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "1d" },
+      );
+
+      res.json({
+        message: `Super access ${isSuperAccess ? "diaktifkan" : "dinonaktifkan"}`,
+        admin,
+        newToken: token,
+      });
+    } else {
+      res.json({
+        message: `Super access ${isSuperAccess ? "diaktifkan" : "dinonaktifkan"}`,
+        admin,
+      });
+    }
+  } catch (error) {
+    console.error("[SET SUPER ACCESS ERROR]", error);
+    res.status(500).json({
+      message: "Gagal mengatur super access",
+    });
   }
 };

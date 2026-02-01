@@ -61,7 +61,7 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Email tidak ditemukan" });
     }
 
-    // ===================== CEK STATUS AKUN (WAJIB) =====================
+    // CEK STATUS AKUN
     if (user.status === "Nonaktif") {
       await delay(1200);
       return res.status(403).json({
@@ -79,6 +79,7 @@ export const login = async (req: Request, res: Response) => {
 
     await delay(1000);
 
+    // ✅ TAMBAHKAN isSuperAccess KE TOKEN
     const token = jwt.sign(
       {
         id: user._id,
@@ -86,15 +87,17 @@ export const login = async (req: Request, res: Response) => {
         email: user.email,
         roles: roleNames,
         status: user.status,
+        isSuperAccess: user.isSuperAccess || false, // ✅ INI YANG PENTING
       },
       process.env.JWT_SECRET as string,
-      { expiresIn: "1d" }
+      { expiresIn: "1d" },
     );
 
     res.json({
       token,
       roles: roleNames,
-      status: user.status, // ⬅️ BIAR FRONTEND BISA BACA
+      status: user.status,
+      isSuperAccess: user.isSuperAccess || false, // ✅ KIRIM JUGA DI RESPONSE
     });
   } catch (error) {
     console.error(error);

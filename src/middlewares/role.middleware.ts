@@ -11,11 +11,21 @@ export const roleMiddleware = (allowedRoles: string[]) => {
       });
     }
 
+    // Admin dengan super access bisa akses semua route
+    if (user.isSuperAccess === true && user.roles.includes("admin")) {
+      return next();
+    }
+
+    // Jika route superadmin, admin dengan super access tetap bisa akses
+    if (allowedRoles.includes("superadmin") && user.isSuperAccess === true) {
+      return next();
+    }
+
     const hasAccess = user.roles.some((role) => allowedRoles.includes(role));
 
     if (!hasAccess) {
       return res.status(403).json({
-        message: "Anda tidak memiliki akses",
+        message: "Anda tidak memiliki akses ke resource ini",
       });
     }
 
