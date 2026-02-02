@@ -11,7 +11,6 @@ import laporanAkhirRoutes from "./laporanAkhir.routes";
 import pesertaRoutes from "./peserta.route";
 import userRoutes from "./userRoutes";
 import overviewRoutes from "./overview.routes";
-import landingRoutes from "./landingRoutes"; // Tambah ini
 
 const router = Router();
 
@@ -32,6 +31,5 @@ router.use("/laporan-akhir", laporanAkhirRoutes);
 router.use("/peserta", pesertaRoutes);
 router.use("/users", userRoutes);
 router.use("/oversistem", overviewRoutes);
-router.use("/api", landingRoutes); // Tambah ini
 
 export default router;
