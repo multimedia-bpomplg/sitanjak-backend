@@ -62,7 +62,7 @@ export const createPendaftaran = async (req: Request, res: Response) => {
 
       if (p.tanggalSelesaiMagang < p.tanggalMulaiMagang) {
         throw new Error(
-          `Tanggal selesai harus setelah tanggal mulai (Peserta ${i + 1})`
+          `Tanggal selesai harus setelah tanggal mulai (Peserta ${i + 1})`,
         );
       }
 
@@ -208,7 +208,7 @@ export const updateStatus = async (req: Request, res: Response) => {
     const data = await Pendaftaran.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { new: true }
+      { new: true },
     );
 
     if (!data) {
@@ -255,7 +255,7 @@ export const setMentorPendaftaran = async (req: Request, res: Response) => {
     const updated = await Pendaftaran.findByIdAndUpdate(
       req.params.id,
       { mentor: mentorId },
-      { new: true }
+      { new: true },
     ).populate("mentor", "name email posisiMentor");
 
     if (!updated) {
@@ -309,7 +309,7 @@ export const setMentorPeserta = async (req: Request, res: Response) => {
 
     const populated = await Pendaftaran.findById(req.params.id).populate(
       "peserta.mentor",
-      "name email posisiMentor"
+      "name email posisiMentor",
     );
 
     return res.json({
