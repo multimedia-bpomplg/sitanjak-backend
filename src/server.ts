@@ -13,25 +13,25 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 /* =======================
-   MIDDLEWARE
-======================= */
+    MIDDLEWARE
+  ======================= */
 app.use(cors());
 app.use(express.json());
 
 /* =======================
-   STATIC FILE
-======================= */
+    STATIC FILE
+  ======================= */
 app.use("/api/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 /* =======================
-   API ROUTES
-======================= */
+    API ROUTES
+  ======================= */
 app.use("/api", router);
 app.use("/api/oversistem", overviewRoutes);
 
 /* =======================
-   HEALTH CHECK
-======================= */
+    HEALTH CHECK
+  ======================= */
 app.get("/api/health", (req, res) => {
   res.json({
     status: "healthy",
@@ -42,8 +42,8 @@ app.get("/api/health", (req, res) => {
 });
 
 /* =======================
-   START SERVER
-======================= */
+    START SERVER
+  ======================= */
 app.listen(PORT, async () => {
   await connectDB();
 

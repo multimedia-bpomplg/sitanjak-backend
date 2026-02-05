@@ -1,3 +1,4 @@
+// models/pendaftaran.ts - UPDATE
 import mongoose, { Schema, Document } from "mongoose";
 
 interface IAsal {
@@ -6,11 +7,11 @@ interface IAsal {
 }
 
 interface IPeserta {
-  user?: mongoose.Types.ObjectId; // ✅ TAMBAHAN WAJIB
+  user?: mongoose.Types.ObjectId;
   nama: string;
   posisi: string;
 
-  jurusan: string; // ✅ WAJIB
+  jurusan: string;
 
   asal: IAsal;
   mentor?: mongoose.Types.ObjectId;
@@ -37,7 +38,7 @@ export interface IPendaftaran extends Document {
   jumlahPeserta: number;
   peserta: IPeserta[];
 
-  mentor?: mongoose.Types.ObjectId; // ✅ TAMBAHAN
+  mentor?: mongoose.Types.ObjectId;
 
   suratPengantar: string;
   suratBalasan?: string;
