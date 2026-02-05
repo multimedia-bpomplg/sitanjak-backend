@@ -15,10 +15,7 @@ const FormasiSchema = new Schema<IFormasi>(
       type: String,
       required: true,
     },
-    divisi: {
-      type: String,
-      required: true,
-    },
+
     kuota: {
       type: Number,
       required: true,
