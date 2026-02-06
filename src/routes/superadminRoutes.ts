@@ -29,6 +29,7 @@ import {
 import { getPesertaDisetujui } from "../controllers/superadminPesertaController";
 import { getAllLaporanAkhir } from "../controllers/superadminLaporanAkhirController";
 import { getAllLaporanBulanan } from "../controllers/superadminLaporanBulananController";
+import { updateStatusMagang } from "../controllers/superadminController";
 
 const router = Router();
 
@@ -179,6 +180,14 @@ router.get(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   getAllLaporanBulanan,
+);
+
+/* ================= UPDATE STATUS MAGANG ================= */
+router.put(
+  "/pendaftaran/:id/status-magang",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]), // ✅ Hanya admin & superadmin
+  updateStatusMagang,
 );
 
 export default router;

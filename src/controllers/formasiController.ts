@@ -14,7 +14,7 @@ const DEFAULT_FORMASI = [
 export const getFormasi = async (req: Request, res: Response) => {
   try {
     // ===============================
-    // 1. CEK & AUTO INSERT FORMASI
+    // 1. AUTO INSERT FORMASI JIKA KOSONG
     // ===============================
     const count = await Formasi.countDocuments();
 
@@ -33,11 +33,29 @@ export const getFormasi = async (req: Request, res: Response) => {
     const formasi = await Formasi.find();
 
     // ===============================
-    // 3. HITUNG PESERTA
+    // 3. HITUNG PESERTA (HANYA DISETUJUI)
     // ===============================
     const statistik = await Pendaftaran.aggregate([
-      { $unwind: "$peserta" },
+      // 🔥 HANYA YANG SUDAH DISETUJUI
+      {
+        $match: {
+          status: "Disetujui",
+        },
+      },
 
+      // Pecah array peserta
+      {
+        $unwind: "$peserta",
+      },
+
+      // Hanya yang punya posisi
+      {
+        $match: {
+          "peserta.posisi": { $ne: "" },
+        },
+      },
+
+      // Group berdasarkan posisi
       {
         $group: {
           _id: "$peserta.posisi",

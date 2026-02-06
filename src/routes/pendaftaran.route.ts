@@ -12,6 +12,7 @@ import {
 } from "../controllers/pendaftaran.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
+import { updateStatusMagang } from "../controllers/superadminController";
 
 const router = Router();
 
@@ -46,6 +47,13 @@ router.put(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   setMentorPeserta,
+);
+
+router.put(
+  "/pendaftaran/:id/status-magang",
+  authMiddleware,
+  roleMiddleware(["superadmin"]), // HANYA SUPERADMIN
+  updateStatusMagang,
 );
 
 export default router;

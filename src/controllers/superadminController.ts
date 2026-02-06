@@ -182,3 +182,48 @@ export const updatePosisiPeserta = async (req: Request, res: Response) => {
     });
   }
 };
+
+/* ================= UPDATE STATUS MAGANG ================= */
+export const updateStatusMagang = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { indexPeserta, statusMagang } = req.body;
+
+    if (indexPeserta === undefined || !statusMagang) {
+      return res.status(400).json({
+        message: "indexPeserta dan statusMagang wajib diisi",
+      });
+    }
+
+    const index = Number(indexPeserta);
+
+    const pendaftaran = await Pendaftaran.findById(id);
+
+    if (!pendaftaran) {
+      return res.status(404).json({
+        message: "Pendaftaran tidak ditemukan",
+      });
+    }
+
+    if (!pendaftaran.peserta[index]) {
+      return res.status(400).json({
+        message: "Index peserta tidak valid",
+      });
+    }
+
+    // ✅ UPDATE STATUS MAGANG
+    pendaftaran.peserta[index].statusMagang = statusMagang;
+
+    await pendaftaran.save();
+
+    res.status(200).json({
+      message: "Status magang berhasil diperbarui",
+      data: pendaftaran,
+    });
+  } catch (err) {
+    console.error("[UPDATE STATUS MAGANG]", err);
+    res.status(500).json({
+      message: "Gagal update status magang",
+    });
+  }
+};
