@@ -30,6 +30,7 @@ import { getPesertaDisetujui } from "../controllers/superadminPesertaController"
 import { getAllLaporanAkhir } from "../controllers/superadminLaporanAkhirController";
 import { getAllLaporanBulanan } from "../controllers/superadminLaporanBulananController";
 import { updateStatusMagang } from "../controllers/superadminController";
+import { updateStatus } from "../controllers/pendaftaran.controller";
 
 const router = Router();
 
@@ -188,6 +189,14 @@ router.put(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]), // ✅ Hanya admin & superadmin
   updateStatusMagang,
+);
+
+/* ================= UPDATE STATUS PENDAFTARAN ================= */
+router.put(
+  "/pendaftaran/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  updateStatus, // ⬅️ INI YANG AUTO SET statusMagang
 );
 
 export default router;

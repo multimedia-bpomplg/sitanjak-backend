@@ -13,9 +13,6 @@ const DEFAULT_FORMASI = [
 
 export const getFormasi = async (req: Request, res: Response) => {
   try {
-    // ===============================
-    // 1. AUTO INSERT FORMASI JIKA KOSONG
-    // ===============================
     const count = await Formasi.countDocuments();
 
     if (count === 0) {
@@ -26,36 +23,30 @@ export const getFormasi = async (req: Request, res: Response) => {
 
       await Formasi.insertMany(data);
     }
-
-    // ===============================
-    // 2. AMBIL FORMASI
-    // ===============================
     const formasi = await Formasi.find();
 
-    // ===============================
-    // 3. HITUNG PESERTA (HANYA DISETUJUI)
-    // ===============================
     const statistik = await Pendaftaran.aggregate([
-      // 🔥 HANYA YANG SUDAH DISETUJUI
+      // 1️⃣ Hanya pendaftaran disetujui
       {
         $match: {
           status: "Disetujui",
         },
       },
 
-      // Pecah array peserta
+      // 2️⃣ Pecah array peserta
       {
         $unwind: "$peserta",
       },
 
-      // Hanya yang punya posisi
+      // 3️⃣ Hanya yang SEDANG MAGANG (mengurangi kuota)
       {
         $match: {
+          "peserta.statusMagang": "Sedang Magang",
           "peserta.posisi": { $ne: "" },
         },
       },
 
-      // Group berdasarkan posisi
+      // 4️⃣ Group berdasarkan posisi
       {
         $group: {
           _id: "$peserta.posisi",

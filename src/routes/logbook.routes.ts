@@ -9,10 +9,16 @@ import {
   getLogbookPesertaByDate,
   getLogbookByPesertaByEmail,
 } from "../controllers/logbookController";
+
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
 import { uploadLogbook } from "../middlewares/uploadLogbook.middleware";
 import { checkLogbookFinalized } from "../middlewares/logbookFinalized.middleware";
+import {
+  downloadAllLogbookPDF,
+  downloadLogbookByUserPDF,
+  downloadLogbookByMentorPDF, // ⬅️ TAMBAH
+} from "../controllers/pdfdownload";
 
 const router = Router();
 
@@ -75,6 +81,25 @@ router.put(
   roleMiddleware(["mentor"]),
   checkLogbookFinalized, // ✅ TAMBAH MIDDLEWARE INI
   approveLogbook,
+);
+
+/* ================= DOWNLOAD SEMUA LOGBOOK (PDF) ================= */
+router.get("/download/pdf", authMiddleware, downloadAllLogbookPDF);
+
+/* ================= DOWNLOAD LOGBOOK PESERTA (ADMIN) ================= */
+router.get(
+  "/admin/:userId/download/pdf",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  downloadLogbookByUserPDF,
+);
+
+/* ================= DOWNLOAD LOGBOOK PESERTA (MENTOR) ================= */
+router.get(
+  "/mentor/:userId/download/pdf",
+  authMiddleware,
+  roleMiddleware(["mentor"]),
+  downloadLogbookByMentorPDF,
 );
 
 export default router;

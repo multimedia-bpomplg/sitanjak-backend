@@ -3,6 +3,7 @@ import Logbook from "../models/Logbook";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User"; // ✅ TAMBAH IMPORT INI
 import mongoose from "mongoose"; // ✅ TAMBAHKAN IMPORT INI
+import PDFDocument from "pdfkit";
 
 /* ================= CREATE ================= */
 export const createLogbook = async (req: any, res: Response) => {

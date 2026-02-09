@@ -23,6 +23,8 @@ export const getPesertaDisetujui = async (req: any, res: Response) => {
         jurusan: p.jurusan,
         kategori: pendaftaran.kategori,
         mentor: p.mentor,
+        // ✅ INI YANG KURANG (PENTING)
+        statusMagang: p.statusMagang || "Menunggu",
         isTerdaftar: p.isTerdaftar || false,
         tanggalMulaiMagang: p.tanggalMulaiMagang,
         tanggalSelesaiMagang: p.tanggalSelesaiMagang,

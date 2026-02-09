@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
+import { Multer } from "multer";
+
+/* ================= TYPE UNTUK MULTER ================= */
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
 
 /* =========================
     CREATE PENDAFTARAN
@@ -141,6 +147,39 @@ export const getAllPendaftaran = async (_req: Request, res: Response) => {
       .populate("peserta.mentor", "name email posisiMentor")
       .sort({ createdAt: -1 });
 
+    const today = new Date();
+
+    let changed = false;
+
+    data.forEach((d) => {
+      if (d.status !== "Disetujui") return;
+
+      d.peserta.forEach((p) => {
+        const start = new Date(p.tanggalMulaiMagang);
+        const end = new Date(p.tanggalSelesaiMagang);
+
+        let newStatus = p.statusMagang;
+
+        if (today < start) {
+          newStatus = "Menunggu";
+        } else if (today >= start && today <= end) {
+          newStatus = "Sedang Magang";
+        } else {
+          newStatus = "Selesai Magang";
+        }
+
+        if (newStatus !== p.statusMagang) {
+          p.statusMagang = newStatus;
+          changed = true;
+        }
+      });
+    });
+
+    // Simpan kalau ada perubahan
+    if (changed) {
+      await Promise.all(data.map((d) => d.save()));
+    }
+
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({
@@ -186,7 +225,7 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
 /* =========================
     UPDATE STATUS + SURAT BALASAN
   ========================= */
-export const updateStatus = async (req: Request, res: Response) => {
+export const updateStatus = async (req: MulterRequest, res: Response) => {
   try {
     const { status, jawabanAdmin } = req.body;
 
@@ -196,30 +235,58 @@ export const updateStatus = async (req: Request, res: Response) => {
       });
     }
 
-    const updateData: any = {
-      status,
-      jawabanAdmin,
-    };
+    // Cari data dulu
+    const pendaftaran = await Pendaftaran.findById(req.params.id);
 
-    if (req.file) {
-      updateData.suratBalasan = `surat-balasan/${req.file.filename}`;
-    }
-
-    const data = await Pendaftaran.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true },
-    );
-
-    if (!data) {
+    if (!pendaftaran) {
       return res.status(404).json({
         message: "Data pendaftaran tidak ditemukan",
       });
     }
 
+    // ================= UPDATE STATUS PENDAFTARAN =================
+    pendaftaran.status = status;
+    pendaftaran.jawabanAdmin = jawabanAdmin;
+
+    // ================= SIMPAN SURAT BALASAN =================
+    if (req.file) {
+      pendaftaran.suratBalasan = `surat-balasan/${req.file.filename}`;
+    }
+
+    // ================= AUTO STATUS MAGANG =================
+    if (status === "Disetujui") {
+      const today = new Date();
+
+      pendaftaran.peserta.forEach((p) => {
+        // JANGAN reset kalau sudah ada
+        if (p.statusMagang === "Selesai Magang") return;
+
+        const start = new Date(p.tanggalMulaiMagang);
+        const end = new Date(p.tanggalSelesaiMagang);
+
+        if (today < start) {
+          p.statusMagang = "Menunggu";
+        } else if (today >= start && today <= end) {
+          p.statusMagang = "Sedang Magang";
+        } else {
+          p.statusMagang = "Selesai Magang";
+        }
+      });
+    }
+
+    // Kalau ditolak
+    if (status === "Ditolak") {
+      pendaftaran.peserta.forEach((p) => {
+        p.statusMagang = "Tidak Magang";
+      });
+    }
+
+    // Simpan
+    await pendaftaran.save();
+
     return res.json({
       message: "Status berhasil diperbarui",
-      data,
+      data: pendaftaran,
     });
   } catch (err: any) {
     console.error("❌ UPDATE STATUS ERROR:", err);
