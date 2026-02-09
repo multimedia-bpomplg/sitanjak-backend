@@ -25,9 +25,9 @@ interface IPeserta {
   alamatLengkap: string;
   email: string;
   wa: string;
-  // ✅ TAMBAHKAN FIELD STATUS MAGANG DENGAN OPTION LENGKAP
   statusMagang?:
     | "Menunggu"
+    | "Belum Waktu Magang" // ✅ TAMBAH INI
     | "Sedang Magang"
     | "Selesai Magang"
     | "Tidak Magang";
@@ -77,10 +77,15 @@ const PesertaSchema = new Schema<IPeserta>(
     alamatLengkap: String,
     email: String,
     wa: String,
-    // ✅ FIELD STATUS MAGANG DENGAN VALIDASI
     statusMagang: {
       type: String,
-      enum: ["Menunggu", "Sedang Magang", "Selesai Magang", "Tidak Magang"],
+      enum: [
+        "Menunggu",
+        "Belum Waktu Magang",
+        "Sedang Magang",
+        "Selesai Magang",
+        "Tidak Magang",
+      ],
       default: "Menunggu",
     },
   },

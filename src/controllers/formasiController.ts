@@ -41,7 +41,9 @@ export const getFormasi = async (req: Request, res: Response) => {
       // 3️⃣ Hanya yang SEDANG MAGANG (mengurangi kuota)
       {
         $match: {
-          "peserta.statusMagang": "Sedang Magang",
+          "peserta.statusMagang": {
+            $in: ["Belum Waktu Magang", "Sedang Magang"],
+          },
           "peserta.posisi": { $ne: "" },
         },
       },

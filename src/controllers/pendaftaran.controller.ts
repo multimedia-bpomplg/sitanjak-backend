@@ -160,11 +160,18 @@ export const getAllPendaftaran = async (_req: Request, res: Response) => {
 
         let newStatus = p.statusMagang;
 
+        // ✅ BELUM MULAI
         if (today < start) {
-          newStatus = "Menunggu";
-        } else if (today >= start && today <= end) {
+          newStatus = "Belum Waktu Magang";
+        }
+
+        // ✅ SEDANG
+        else if (today >= start && today <= end) {
           newStatus = "Sedang Magang";
-        } else {
+        }
+
+        // ✅ SELESAI
+        else {
           newStatus = "Selesai Magang";
         }
 
@@ -258,17 +265,23 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
       const today = new Date();
 
       pendaftaran.peserta.forEach((p) => {
-        // JANGAN reset kalau sudah ada
         if (p.statusMagang === "Selesai Magang") return;
 
         const start = new Date(p.tanggalMulaiMagang);
         const end = new Date(p.tanggalSelesaiMagang);
 
+        // ✅ BELUM MULAI = BELUM WAKTU MAGANG
         if (today < start) {
-          p.statusMagang = "Menunggu";
-        } else if (today >= start && today <= end) {
+          p.statusMagang = "Belum Waktu Magang";
+        }
+
+        // ✅ SEDANG MAGANG
+        else if (today >= start && today <= end) {
           p.statusMagang = "Sedang Magang";
-        } else {
+        }
+
+        // ✅ SELESAI
+        else {
           p.statusMagang = "Selesai Magang";
         }
       });
