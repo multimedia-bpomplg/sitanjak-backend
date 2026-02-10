@@ -12,7 +12,7 @@ import {
 
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
-import { uploadLogbook } from "../middlewares/uploadLogbook.middleware";
+import { uploadLogbook } from "../middlewares/upload.middleware";
 import { checkLogbookFinalized } from "../middlewares/logbookFinalized.middleware";
 import {
   downloadAllLogbookPDF,
@@ -28,7 +28,10 @@ const router = Router();
 router.post(
   "/",
   authMiddleware,
-  uploadLogbook.array("files", 3),
+  uploadLogbook.fields([
+    { name: "files", maxCount: 3 },
+    { name: "pdfFile", maxCount: 1 },
+  ]),
   createLogbook, // ✅ HAPUS KOMA DI SINI
 );
 

@@ -21,17 +21,30 @@ export const createLogbook = async (req: any, res: Response) => {
       });
     }
 
-    const files =
-      (req.files as Express.Multer.File[])?.map(
-        (f) => `uploads/logbook/${f.filename}`,
-      ) || [];
+    const uploaded = req.files as {
+      files?: Express.Multer.File[];
+      pdfFile?: Express.Multer.File[];
+    };
 
-    // ✅ TAMBAH STATUS APPROVAL
+    const images: string[] = [];
+    let pdfFile: string | null = null;
+
+    // FOTO
+    uploaded?.files?.forEach((f) => {
+      images.push(`uploads/logbook/image/${f.filename}`);
+    });
+
+    // PDF
+    if (uploaded?.pdfFile?.[0]) {
+      pdfFile = `uploads/logbook/pdf/${uploaded.pdfFile[0].filename}`;
+    }
+
     const logbook = await Logbook.create({
       user: userId,
       ...req.body,
-      files,
-      approvalStatus: "menunggu", // Status default
+      files: images,
+      pdfFile,
+      approvalStatus: "menunggu",
       approvedByMentor: false,
     });
 
@@ -46,11 +59,18 @@ export const getFilledDates = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
 
-    const logs = await Logbook.find({ user: userId }).select("date status");
+    const logs = await Logbook.find({ user: userId }).select(
+      "date status approvalStatus",
+    );
 
-    const result: Record<string, string> = {};
+    const result: Record<string, { status: string; approvalStatus: string }> =
+      {};
+
     logs.forEach((l) => {
-      result[l.date] = l.status;
+      result[l.date] = {
+        status: l.status,
+        approvalStatus: l.approvalStatus || "menunggu",
+      };
     });
 
     res.json(result);
@@ -66,19 +86,32 @@ export const getSummary = async (req: any, res: Response) => {
   const userId = req.user.id;
 
   const total = await Logbook.countDocuments({ user: userId });
+
+  // ✅ HADIR VALID (DISSETUJUI)
   const hadir = await Logbook.countDocuments({
     user: userId,
     status: "hadir",
+    approvalStatus: "disetujui",
   });
 
+  // ❌ TIDAK HADIR (KETERANGAN)
   const tidakHadirDenganKeterangan = await Logbook.countDocuments({
     user: userId,
     status: "tidak_hadir_keterangan",
+    approvalStatus: "disetujui",
   });
 
+  // ❌ TIDAK HADIR (TANPA KETERANGAN)
   const tidakHadirTanpaKeterangan = await Logbook.countDocuments({
     user: userId,
     status: "tidak_hadir_tanpa_keterangan",
+    approvalStatus: "disetujui",
+  });
+
+  // ⛔ DITOLAK MENTOR (SEMUA STATUS)
+  const ditolak = await Logbook.countDocuments({
+    user: userId,
+    approvalStatus: "ditolak",
   });
 
   res.json({
@@ -86,6 +119,7 @@ export const getSummary = async (req: any, res: Response) => {
     hadir,
     tidakHadirDenganKeterangan,
     tidakHadirTanpaKeterangan,
+    ditolak,
   });
 };
 
@@ -113,9 +147,12 @@ export const getLogbookByDate = async (req: any, res: Response) => {
       kendala: logbook.kendala,
       keterangan: logbook.keterangan,
       files: logbook.files,
+
+      // ✅ TAMBAH INI
+      pdfFile: logbook.pdfFile,
+
       approvedByMentor: logbook.approvedByMentor,
       mentorNote: logbook.mentorNote,
-      // ✅ TAMBAH INI
       approvalStatus: logbook.approvalStatus || "menunggu",
       approvedAt: logbook.approvedAt,
     });

@@ -24,7 +24,12 @@ const LogbookSchema = new mongoose.Schema(
     kendala: String,
     keterangan: String,
 
-    files: [String],
+    files: [String], // foto
+
+    pdfFile: {
+      type: String,
+      default: null,
+    },
 
     // 🔥 STATUS PERSETUJUAN MENTOR (DITAMBAHKAN)
     approvalStatus: {
