@@ -8,6 +8,8 @@ import {
   approveLogbook,
   getLogbookPesertaByDate,
   getLogbookByPesertaByEmail,
+  requestRevision,
+  submitRevision,
 } from "../controllers/logbookController";
 
 import { authMiddleware } from "../middlewares/auth.middleware";
@@ -19,6 +21,7 @@ import {
   downloadLogbookByUserPDF,
   downloadLogbookByMentorPDF, // ⬅️ TAMBAH
 } from "../controllers/pdfdownload";
+import { getFilledDatesByPeserta } from "../controllers/logbookController";
 
 const router = Router();
 
@@ -52,14 +55,6 @@ router.get(
   authMiddleware,
   roleMiddleware(["mentor"]),
   getLogbookByPeserta, // ✅ HAPUS KOMA DI SINI
-);
-
-/* APPROVE LOGBOOK */
-router.put(
-  "/mentor/approve/:id",
-  authMiddleware,
-  roleMiddleware(["mentor"]),
-  approveLogbook, // ✅ HAPUS KOMA DI SINI
 );
 
 /* GET LOGBOOK PESERTA BY DATE */
@@ -105,4 +100,20 @@ router.get(
   downloadLogbookByMentorPDF,
 );
 
+/* ================= GET CALENDAR DATES FOR PESERTA (MENTOR) ================= */
+router.get(
+  "/mentor/calendar/:userId",
+  authMiddleware,
+  roleMiddleware(["mentor"]),
+  getFilledDatesByPeserta,
+);
+
+router.put(
+  "/mentor/revisi/:id",
+  authMiddleware,
+  roleMiddleware(["mentor"]),
+  requestRevision,
+);
+
+router.put("/logbook/:id/submit-revision", authMiddleware, submitRevision);
 export default router;

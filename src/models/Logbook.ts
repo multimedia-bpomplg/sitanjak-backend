@@ -34,7 +34,7 @@ const LogbookSchema = new mongoose.Schema(
     // 🔥 STATUS PERSETUJUAN MENTOR (DITAMBAHKAN)
     approvalStatus: {
       type: String,
-      enum: ["menunggu", "disetujui", "ditolak"],
+      enum: ["menunggu", "disetujui", "ditolak", "revisi"],
       default: "menunggu",
     },
 
