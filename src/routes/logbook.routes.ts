@@ -10,6 +10,8 @@ import {
   getLogbookByPesertaByEmail,
   requestRevision,
   submitRevision,
+  getLogbookDetail, // 🔥 TAMBAH
+  getFilledDatesByPeserta,
 } from "../controllers/logbookController";
 
 import { authMiddleware } from "../middlewares/auth.middleware";
@@ -19,15 +21,14 @@ import { checkLogbookFinalized } from "../middlewares/logbookFinalized.middlewar
 import {
   downloadAllLogbookPDF,
   downloadLogbookByUserPDF,
-  downloadLogbookByMentorPDF, // ⬅️ TAMBAH
+  downloadLogbookByMentorPDF,
 } from "../controllers/pdfdownload";
-import { getFilledDatesByPeserta } from "../controllers/logbookController";
 
 const router = Router();
 
 /* ================= PESERTA ================= */
 
-/* CREATE LOGBOOK + FOTO */
+// CREATE LOGBOOK + FOTO
 router.post(
   "/",
   authMiddleware,
@@ -35,72 +36,76 @@ router.post(
     { name: "files", maxCount: 3 },
     { name: "pdfFile", maxCount: 1 },
   ]),
-  createLogbook, // ✅ HAPUS KOMA DI SINI
+  createLogbook,
 );
 
-/* FILLED DATES */
+// GET FILLED DATES
 router.get("/filled-dates", authMiddleware, getFilledDates);
 
-/* SUMMARY */
+// GET SUMMARY
 router.get("/summary", authMiddleware, getSummary);
 
-/* GET LOGBOOK BY DATE */
+// GET LOGBOOK BY DATE
 router.get("/date/:date", authMiddleware, getLogbookByDate);
+
+// 🔥 GET LOGBOOK DETAIL BY ID
+router.get("/:id/detail", authMiddleware, getLogbookDetail);
+
+// 🔥 SUBMIT REVISION (PESERTA)
+router.put(
+  "/:id/submit-revision",
+  authMiddleware,
+  uploadLogbook.fields([
+    { name: "files", maxCount: 3 },
+    { name: "pdfFile", maxCount: 1 },
+  ]),
+  submitRevision,
+);
 
 /* ================= MENTOR ================= */
 
-/* GET LOGBOOK PESERTA */
+// GET LOGBOOK PESERTA
 router.get(
   "/mentor/peserta/:userId",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  getLogbookByPeserta, // ✅ HAPUS KOMA DI SINI
+  getLogbookByPeserta,
 );
 
-/* GET LOGBOOK PESERTA BY DATE */
+// GET LOGBOOK PESERTA BY DATE
 router.get(
   "/mentor/peserta/:userId/date/:date",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  getLogbookPesertaByDate, // ✅ HAPUS KOMA DI SINI
+  getLogbookPesertaByDate,
 );
 
-/* GET LOGBOOK PESERTA BY EMAIL */
+// GET LOGBOOK PESERTA BY EMAIL
 router.get(
   "/mentor/peserta/email/:email",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  getLogbookByPesertaByEmail, // ✅ HAPUS KOMA DI SINI
+  getLogbookByPesertaByEmail,
 );
 
+// APPROVE/REJECT LOGBOOK
 router.put(
   "/mentor/approve/:id",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  checkLogbookFinalized, // ✅ TAMBAH MIDDLEWARE INI
+  checkLogbookFinalized,
   approveLogbook,
 );
 
-/* ================= DOWNLOAD SEMUA LOGBOOK (PDF) ================= */
-router.get("/download/pdf", authMiddleware, downloadAllLogbookPDF);
-
-/* ================= DOWNLOAD LOGBOOK PESERTA (ADMIN) ================= */
-router.get(
-  "/admin/:userId/download/pdf",
-  authMiddleware,
-  roleMiddleware(["admin", "superadmin"]),
-  downloadLogbookByUserPDF,
-);
-
-/* ================= DOWNLOAD LOGBOOK PESERTA (MENTOR) ================= */
-router.get(
-  "/mentor/:userId/download/pdf",
+// 🔥 REQUEST REVISION (MENTOR)
+router.put(
+  "/mentor/request-revision/:id",
   authMiddleware,
   roleMiddleware(["mentor"]),
-  downloadLogbookByMentorPDF,
+  requestRevision,
 );
 
-/* ================= GET CALENDAR DATES FOR PESERTA (MENTOR) ================= */
+// GET CALENDAR DATES FOR PESERTA (MENTOR)
 router.get(
   "/mentor/calendar/:userId",
   authMiddleware,
@@ -108,12 +113,22 @@ router.get(
   getFilledDatesByPeserta,
 );
 
-router.put(
-  "/mentor/revisi/:id",
+/* ================= DOWNLOAD PDF ================= */
+
+router.get("/download/pdf", authMiddleware, downloadAllLogbookPDF);
+
+router.get(
+  "/admin/:userId/download/pdf",
   authMiddleware,
-  roleMiddleware(["mentor"]),
-  requestRevision,
+  roleMiddleware(["admin", "superadmin"]),
+  downloadLogbookByUserPDF,
 );
 
-router.put("/logbook/:id/submit-revision", authMiddleware, submitRevision);
+router.get(
+  "/mentor/:userId/download/pdf",
+  authMiddleware,
+  roleMiddleware(["mentor"]),
+  downloadLogbookByMentorPDF,
+);
+
 export default router;

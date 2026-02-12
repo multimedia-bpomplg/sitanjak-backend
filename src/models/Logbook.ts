@@ -1,3 +1,4 @@
+// models/Logbook.ts
 import mongoose from "mongoose";
 
 const LogbookSchema = new mongoose.Schema(
@@ -31,7 +32,7 @@ const LogbookSchema = new mongoose.Schema(
       default: null,
     },
 
-    // 🔥 STATUS PERSETUJUAN MENTOR (DITAMBAHKAN)
+    // 🔥 STATUS PERSETUJUAN MENTOR
     approvalStatus: {
       type: String,
       enum: ["menunggu", "disetujui", "ditolak", "revisi"],
@@ -48,6 +49,17 @@ const LogbookSchema = new mongoose.Schema(
       default: "",
     },
 
+    // 🔥 CATATAN REVISI (KHUSUS UNTUK STATUS REVISI)
+    revisionNote: {
+      type: String,
+      default: "",
+    },
+
+    // 🔥 TANGGAL REVISI DIMINTA
+    revisionRequestedAt: {
+      type: Date,
+    },
+
     // 🔥 TANGGAL APPROVAL
     approvedAt: {
       type: Date,
@@ -62,6 +74,10 @@ const LogbookSchema = new mongoose.Schema(
     isFinalized: {
       type: Boolean,
       default: false,
+    },
+
+    finalizedAt: {
+      type: Date,
     },
   },
 

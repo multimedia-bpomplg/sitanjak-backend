@@ -5,117 +5,137 @@ import User from "../models/User"; // ✅ TAMBAH IMPORT INI
 import mongoose from "mongoose"; // ✅ TAMBAHKAN IMPORT INI
 import PDFDocument from "pdfkit";
 
-/* ================= CREATE ================= */
+/* ================= CREATE LOGBOOK ================= */
 export const createLogbook = async (req: any, res: Response) => {
   try {
-    const userId = req.user.id; // ✅ FIX
+    const userId = req.user.id;
 
     const exists = await Logbook.findOne({
       user: userId,
       date: req.body.date,
-    }).lean();
+    });
 
     const uploaded = req.files as {
       files?: Express.Multer.File[];
       pdfFile?: Express.Multer.File[];
     };
 
-    // ✅ BUAT DULU
+    // Proses file upload
     const images: string[] = [];
-    let pdfFile: string | null = null;
+    let pdfFilePath: string | null = null;
 
     uploaded?.files?.forEach((f) => {
       images.push(`uploads/logbook/image/${f.filename}`);
     });
 
     if (uploaded?.pdfFile?.[0]) {
-      pdfFile = `uploads/logbook/pdf/${uploaded.pdfFile[0].filename}`;
+      pdfFilePath = `uploads/logbook/pdf/${uploaded.pdfFile[0].filename}`;
     }
 
-    if (exists && exists.approvalStatus === "disetujui") {
-      return res.status(400).json({
-        message: "Logbook sudah disetujui dan tidak bisa diubah",
-      });
-    }
+    // 🔥 CEK STATUS LOGBOOK YANG SUDAH ADA
+    if (exists) {
+      // Jika sudah disetujui - tidak bisa diubah
+      if (exists.approvalStatus === "disetujui") {
+        return res.status(400).json({
+          message: "Logbook sudah disetujui dan tidak bisa diubah",
+        });
+      }
 
-    if (exists && exists.approvalStatus === "ditolak") {
-      return res.status(400).json({
-        message: "Logbook ditolak dan tidak bisa diubah",
-      });
-    }
+      // Jika ditolak - tidak bisa diubah
+      if (exists.approvalStatus === "ditolak") {
+        return res.status(400).json({
+          message: "Logbook ditolak dan tidak bisa diubah",
+        });
+      }
 
-    // ❌ SUDAH ADA & BUKAN REVISI
-    if (exists && exists.approvalStatus !== "revisi") {
+      // 🔥 Jika dalam status REVISI - update data
+      if (exists.approvalStatus === "revisi") {
+        // Merge files: existing files + files baru
+        const existingFiles = exists.files || [];
+        const mergedFiles = [...existingFiles, ...images];
+
+        await Logbook.findByIdAndUpdate(exists._id, {
+          status: req.body.status,
+          judul: req.body.judul,
+          pengalaman: req.body.pengalaman,
+          kendala: req.body.kendala,
+          keterangan: req.body.keterangan,
+          files: mergedFiles,
+          pdfFile: pdfFilePath || exists.pdfFile,
+          // Reset approval status
+          approvalStatus: "menunggu",
+          mentorNote: "",
+          approvedAt: null,
+          isFinalized: false,
+        });
+
+        return res.json({
+          success: true,
+          message: "Revisi logbook berhasil dikirim",
+        });
+      }
+
+      // Jika sudah ada dan bukan revisi
       return res.status(400).json({
         message: "Logbook untuk tanggal ini sudah diisi",
       });
     }
 
-    // 🔁 REVISI
-    if (exists && exists.approvalStatus === "revisi") {
-      await Logbook.findByIdAndUpdate(exists._id, {
-        // ❗ PAKAI STATUS LAMA
-        status: exists.status,
-
-        // ✅ FIELD BOLEH UPDATE
-        judul: req.body.judul,
-        pengalaman: req.body.pengalaman,
-        kendala: req.body.kendala,
-        keterangan: req.body.keterangan,
-
-        files: images,
-        pdfFile,
-
-        // reset approval
-        approvalStatus: "menunggu",
-        mentorNote: "",
-        approvedAt: null,
-        isFinalized: false,
-      });
-
-      return res.json({
-        message: "Revisi berhasil dikirim ulang",
-      });
-    }
-
-    // ✅ CREATE BARU
+    // 🔥 CREATE BARU
     const logbook = await Logbook.create({
       user: userId,
-      ...req.body,
+      date: req.body.date,
+      status: req.body.status,
+      judul: req.body.judul,
+      pengalaman: req.body.pengalaman,
+      kendala: req.body.kendala,
+      keterangan: req.body.keterangan,
       files: images,
-      pdfFile,
+      pdfFile: pdfFilePath,
       approvalStatus: "menunggu",
       approvedByMentor: false,
+      isFinalized: false,
     });
 
-    res.status(201).json(logbook);
+    res.status(201).json({
+      success: true,
+      message: "Logbook berhasil dibuat",
+      data: logbook,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("[CREATE LOGBOOK]", err);
     res.status(500).json({ message: "Gagal menyimpan logbook" });
   }
 };
-
 /* ================= GET FILLED DATES ================= */
 export const getFilledDates = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
 
     const logs = await Logbook.find({ user: userId }).select(
-      "date status approvalStatus",
+      "date status approvalStatus _id",
     );
 
-    const result: Record<string, { status: string; approvalStatus: string }> =
-      {};
+    const result: Record<
+      string,
+      {
+        status: string;
+        approvalStatus: string;
+        _id: string;
+      }
+    > = {};
 
     logs.forEach((l) => {
       result[l.date] = {
         status: l.status,
         approvalStatus: l.approvalStatus || "menunggu",
+        _id: l._id.toString(),
       };
     });
 
     res.json(result);
   } catch (err) {
+    console.error("[GET FILLED DATES]", err);
     res.status(500).json({
       message: "Gagal mengambil tanggal logbook",
     });
@@ -182,22 +202,24 @@ export const getLogbookByDate = async (req: any, res: Response) => {
     }
 
     res.json({
+      _id: logbook._id,
       status: logbook.status,
       judul: logbook.judul,
       pengalaman: logbook.pengalaman,
       kendala: logbook.kendala,
       keterangan: logbook.keterangan,
       files: logbook.files,
-
-      // ✅ TAMBAH INI
       pdfFile: logbook.pdfFile,
-
       approvedByMentor: logbook.approvedByMentor,
       mentorNote: logbook.mentorNote,
+      revisionNote: logbook.revisionNote,
       approvalStatus: logbook.approvalStatus || "menunggu",
       approvedAt: logbook.approvedAt,
+      revisionRequestedAt: logbook.revisionRequestedAt,
+      isFinalized: logbook.isFinalized,
     });
   } catch (err) {
+    console.error("[GET LOGBOOK BY DATE]", err);
     res.status(500).json({
       message: "Gagal mengambil detail logbook",
     });
@@ -495,11 +517,64 @@ export const getFilledDatesByPeserta = async (req: any, res: Response) => {
   }
 };
 
+/* ================= GET LOGBOOK DETAIL BY ID ================= */
+export const getLogbookDetail = async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID logbook tidak valid" });
+    }
+
+    const logbook = await Logbook.findById(id);
+
+    if (!logbook) {
+      return res.status(404).json({ message: "Logbook tidak ditemukan" });
+    }
+
+    // Validasi akses
+    if (
+      req.user.role === "peserta" &&
+      logbook.user.toString() !== req.user.id
+    ) {
+      return res.status(403).json({ message: "Akses ditolak" });
+    }
+
+    res.json({
+      _id: logbook._id,
+      status: logbook.status,
+      judul: logbook.judul,
+      pengalaman: logbook.pengalaman,
+      kendala: logbook.kendala,
+      keterangan: logbook.keterangan,
+      files: logbook.files,
+      pdfFile: logbook.pdfFile,
+      approvedByMentor: logbook.approvedByMentor,
+      mentorNote: logbook.mentorNote,
+      revisionNote: logbook.revisionNote,
+      approvalStatus: logbook.approvalStatus,
+      approvedAt: logbook.approvedAt,
+      revisionRequestedAt: logbook.revisionRequestedAt,
+      isFinalized: logbook.isFinalized,
+    });
+  } catch (err) {
+    console.error("[GET LOGBOOK DETAIL]", err);
+    res.status(500).json({ message: "Gagal mengambil detail logbook" });
+  }
+};
+
+/* ================= REQUEST REVISION (MENTOR) ================= */
 export const requestRevision = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { mentorNote } = req.body;
+    const { revisionNote } = req.body;
     const mentorId = (req as any).user.id;
+
+    if (!revisionNote?.trim()) {
+      return res.status(400).json({
+        message: "Catatan revisi wajib diisi",
+      });
+    }
 
     const logbook = await Logbook.findById(id).populate("user", "email");
 
@@ -507,13 +582,14 @@ export const requestRevision = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Logbook tidak ditemukan" });
     }
 
+    // Cek apakah sudah final
     if (logbook.isFinalized) {
       return res.status(400).json({
         message: "Logbook sudah final, tidak bisa direvisi",
       });
     }
 
-    // validasi mentor
+    // Validasi mentor
     const valid = await Pendaftaran.findOne({
       "peserta.email": (logbook.user as any).email,
       "peserta.mentor": mentorId,
@@ -525,8 +601,11 @@ export const requestRevision = async (req: Request, res: Response) => {
       });
     }
 
+    // 🔥 UPDATE STATUS REVISI
     logbook.approvalStatus = "revisi";
-    logbook.mentorNote = mentorNote || "";
+    logbook.revisionNote = revisionNote.trim();
+    logbook.revisionRequestedAt = new Date();
+    logbook.mentorNote = revisionNote.trim(); // Simpan juga di mentorNote untuk kompatibilitas
     logbook.isFinalized = false;
     logbook.approvedAt = null;
 
@@ -534,7 +613,7 @@ export const requestRevision = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: "Logbook dikembalikan untuk revisi",
+      message: "Permintaan revisi berhasil dikirim ke peserta",
     });
   } catch (err) {
     console.error("[REQUEST REVISION]", err);
@@ -544,10 +623,16 @@ export const requestRevision = async (req: Request, res: Response) => {
   }
 };
 
+/* ================= SUBMIT REVISION (PESERTA) ================= */
 export const submitRevision = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+
+    console.log("📥 Submit Revision - ID:", id);
+    console.log("📥 User ID:", userId);
+    console.log("📥 Request body:", req.body);
+    console.log("📥 Files:", req.files);
 
     const logbook = await Logbook.findById(id);
 
@@ -557,25 +642,63 @@ export const submitRevision = async (req: any, res: Response) => {
       });
     }
 
+    // Validasi kepemilikan
     if (logbook.user.toString() !== userId) {
       return res.status(403).json({
         message: "Akses ditolak",
       });
     }
 
+    // Validasi status
     if (logbook.approvalStatus !== "revisi") {
       return res.status(400).json({
         message: "Logbook bukan dalam status revisi",
+        currentStatus: logbook.approvalStatus,
       });
     }
 
-    // Reset status
-    logbook.approvalStatus = "menunggu";
-    logbook.mentorNote = "";
-    logbook.isFinalized = false;
-    logbook.approvedAt = null;
+    // Proses file upload
+    const uploaded = req.files as {
+      files?: Express.Multer.File[];
+      pdfFile?: Express.Multer.File[];
+    };
 
-    await logbook.save();
+    const newImages: string[] = [];
+    let newPdfFile: string | null = null;
+
+    uploaded?.files?.forEach((f) => {
+      newImages.push(`uploads/logbook/image/${f.filename}`);
+    });
+
+    if (uploaded?.pdfFile?.[0]) {
+      newPdfFile = `uploads/logbook/pdf/${uploaded.pdfFile[0].filename}`;
+    }
+
+    // 🔥 UPDATE SEMUA FIELD
+    const updateData: any = {
+      status: req.body.status || logbook.status,
+      judul: req.body.judul || logbook.judul,
+      pengalaman: req.body.pengalaman || logbook.pengalaman,
+      kendala: req.body.kendala || logbook.kendala,
+      keterangan: req.body.keterangan || logbook.keterangan,
+      approvalStatus: "menunggu",
+      mentorNote: "",
+      revisionNote: "",
+      revisionRequestedAt: null,
+      isFinalized: false,
+      approvedAt: null,
+    };
+
+    // Merge files: existing + new
+    if (newImages.length > 0) {
+      updateData.files = [...(logbook.files || []), ...newImages];
+    }
+
+    if (newPdfFile) {
+      updateData.pdfFile = newPdfFile;
+    }
+
+    await Logbook.findByIdAndUpdate(id, updateData, { new: true });
 
     res.json({
       success: true,
