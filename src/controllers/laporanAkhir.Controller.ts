@@ -1,16 +1,22 @@
-// controllers/LaporanAkhirController.ts
+// controllers/LaporanAkhir.Controller.ts
+
 import { Request, Response } from "express";
-import PDFDocument from "pdfkit";
+import fs from "fs";
+import path from "path";
 import LaporanAkhir from "../models/LaporanAkhir";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
+import { uploadLaporanAkhir } from "../middlewares/upload.middleware";
 
 /* ================= GET LAPORAN AKHIR (PESERTA) ================= */
 export const getLaporanAkhir = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
 
-    const laporan = await LaporanAkhir.findOne({ user: userId });
+    const laporan = await LaporanAkhir.findOne({ user: userId }).populate(
+      "approvedByMentor",
+      "name email",
+    );
 
     if (!laporan) {
       return res.status(404).json({ message: "Laporan akhir belum ada" });
@@ -22,11 +28,12 @@ export const getLaporanAkhir = async (req: any, res: Response) => {
   }
 };
 
-/* ================= CREATE LAPORAN AKHIR (1x ONLY) ================= */
-export const createLaporanAkhir = async (req: any, res: Response) => {
+/* ================= UPLOAD LAPORAN AKHIR PDF ================= */
+export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
 
+    // Cek apakah sudah pernah upload
     const exists = await LaporanAkhir.findOne({ user: userId });
     if (exists) {
       return res.status(400).json({
@@ -34,69 +41,121 @@ export const createLaporanAkhir = async (req: any, res: Response) => {
       });
     }
 
+    // Cek file
+    if (!req.file) {
+      return res.status(400).json({ message: "File PDF wajib diupload" });
+    }
+
+    const file = req.file;
+
+    // Validasi ukuran file (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      fs.unlinkSync(file.path);
+      return res.status(400).json({
+        message: "Ukuran file maksimal 10MB",
+      });
+    }
+
+    // Simpan ke database
     const laporan = await LaporanAkhir.create({
       user: userId,
+      filePdf: file.path,
+      fileName: file.originalname,
+      fileSize: file.size,
       status: "Menunggu",
-      ...req.body,
     });
 
-    res.status(201).json(laporan);
+    res.status(201).json({
+      message: "Laporan akhir berhasil diupload",
+      laporan: {
+        _id: laporan._id,
+        fileName: laporan.fileName,
+        fileSize: laporan.fileSize,
+        status: laporan.status,
+        submittedAt: laporan.submittedAt,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ message: "Gagal menyimpan laporan akhir" });
+    console.error(err);
+    res.status(500).json({ message: "Gagal mengupload laporan akhir" });
   }
 };
 
-/* ================= DOWNLOAD PDF (PUBLIC) ================= */
+/* ================= DOWNLOAD PDF LAPORAN AKHIR ================= */
 export const downloadLaporanAkhirPdf = async (req: any, res: Response) => {
   try {
+    const { id } = req.params;
     const userId = req.user.id;
+    const userRole = req.user.roles;
 
-    const laporan = await LaporanAkhir.findOne({ user: userId });
+    let laporan;
+
+    if (userRole.includes("mentor")) {
+      laporan = await LaporanAkhir.findById(id);
+    } else {
+      laporan = await LaporanAkhir.findOne({ user: userId });
+    }
+
     if (!laporan) {
       return res.status(404).json({ message: "Laporan tidak ditemukan" });
     }
 
-    const doc = new PDFDocument({ margin: 50 });
+    if (!fs.existsSync(laporan.filePdf)) {
+      return res.status(404).json({ message: "File PDF tidak ditemukan" });
+    }
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      "attachment; filename=Laporan_Akhir_Magang.pdf",
+      `attachment; filename="Laporan_Akhir_${laporan.fileName}"`,
     );
 
-    doc.pipe(res);
-
-    doc.fontSize(18).text("LAPORAN AKHIR MAGANG", { align: "center" });
-    doc.moveDown(2);
-
-    section(doc, "Judul Laporan", laporan.judul);
-    section(doc, "Ringkasan", laporan.ringkasan);
-    section(doc, "Hasil & Pencapaian", laporan.hasil);
-    section(doc, "Kendala", laporan.kendala);
-    section(doc, "Kesimpulan", laporan.kesimpulan);
-    section(doc, "Saran", laporan.saran || "-");
-
-    // Tambahkan status
-    doc.moveDown();
-    doc.fontSize(11).text(`Status: ${laporan.status}`, { align: "right" });
-
-    if (laporan.mentorNote) {
-      doc.moveDown();
-      doc
-        .fontSize(11)
-        .text(`Catatan Mentor: ${laporan.mentorNote}`, { align: "right" });
-    }
-
-    doc.end();
+    const fileStream = fs.createReadStream(laporan.filePdf);
+    fileStream.pipe(res);
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      message: "Gagal membuat PDF laporan akhir",
-    });
+    res.status(500).json({ message: "Gagal mengunduh PDF" });
   }
 };
 
-/* ================= GET ALL LAPORAN AKHIR PESERTA BIMBINGAN (UNTUK MENTOR) ================= */
+/* ================= VIEW PDF DI BROWSER ================= */
+export const viewLaporanAkhirPdf = async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.roles;
+
+    let laporan;
+
+    if (userRole.includes("mentor")) {
+      laporan = await LaporanAkhir.findById(id);
+    } else {
+      laporan = await LaporanAkhir.findOne({ user: userId });
+    }
+
+    if (!laporan) {
+      return res.status(404).json({ message: "Laporan tidak ditemukan" });
+    }
+
+    if (!fs.existsSync(laporan.filePdf)) {
+      return res.status(404).json({ message: "File PDF tidak ditemukan" });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${laporan.fileName}"`,
+    );
+
+    const fileStream = fs.createReadStream(laporan.filePdf);
+    fileStream.pipe(res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal menampilkan PDF" });
+  }
+};
+
+/* ================= GET ALL LAPORAN AKHIR PESERTA BIMBINGAN ================= */
 export const getAllLaporanAkhirPesertaBimbingan = async (
   req: any,
   res: Response,
@@ -104,13 +163,11 @@ export const getAllLaporanAkhirPesertaBimbingan = async (
   try {
     const mentorId = req.user.id;
 
-    // Ambil semua pendaftaran yang disetujui dengan mentor ini
     const pendaftaranList = await Pendaftaran.find({
       status: "Disetujui",
       "peserta.mentor": mentorId,
     });
 
-    // Kumpulkan semua email peserta
     const pesertaEmails: string[] = [];
 
     pendaftaranList.forEach((pendaftaran) => {
@@ -121,11 +178,9 @@ export const getAllLaporanAkhirPesertaBimbingan = async (
       });
     });
 
-    // Cari user berdasarkan email
     const users = await User.find({ email: { $in: pesertaEmails } });
     const userIds = users.map((user) => user._id);
 
-    // Ambil semua laporan akhir
     const laporanList = await LaporanAkhir.find({
       user: { $in: userIds },
     })
@@ -135,15 +190,12 @@ export const getAllLaporanAkhirPesertaBimbingan = async (
 
     res.json(laporanList);
   } catch (err: any) {
-    console.error("Error getAllLaporanAkhirPesertaBimbingan:", err);
-    res.status(500).json({
-      message: "Gagal mengambil laporan akhir peserta",
-      error: err.message,
-    });
+    console.error(err);
+    res.status(500).json({ message: "Gagal mengambil laporan akhir peserta" });
   }
 };
 
-/* ================= GET LAPORAN AKHIR PESERTA BY EMAIL (UNTUK MENTOR) ================= */
+/* ================= GET LAPORAN AKHIR PESERTA BY EMAIL ================= */
 export const getLaporanAkhirPesertaByEmail = async (
   req: any,
   res: Response,
@@ -152,7 +204,6 @@ export const getLaporanAkhirPesertaByEmail = async (
     const mentorId = req.user.id;
     const { pesertaEmail } = req.params;
 
-    // Verifikasi bahwa mentor adalah mentor dari peserta ini
     const validasi = await Pendaftaran.findOne({
       "peserta.email": pesertaEmail,
       "peserta.mentor": mentorId,
@@ -165,16 +216,12 @@ export const getLaporanAkhirPesertaByEmail = async (
       });
     }
 
-    // Cari user berdasarkan email
     const user = await User.findOne({ email: pesertaEmail });
 
     if (!user) {
-      return res.status(404).json({
-        message: "User tidak ditemukan",
-      });
+      return res.status(404).json({ message: "User tidak ditemukan" });
     }
 
-    // Cari laporan akhir
     const laporan = await LaporanAkhir.findOne({
       user: user._id,
     })
@@ -182,45 +229,43 @@ export const getLaporanAkhirPesertaByEmail = async (
       .populate("approvedByMentor", "name email");
 
     if (!laporan) {
-      return res.status(404).json({
-        message: "Laporan akhir tidak ditemukan",
-      });
+      return res.status(404).json({ message: "Laporan akhir tidak ditemukan" });
     }
 
     res.json(laporan);
   } catch (err: any) {
-    console.error("Error getLaporanAkhirPesertaByEmail:", err);
-    res.status(500).json({
-      message: "Gagal mengambil laporan akhir peserta",
-      error: err.message,
-    });
+    console.error(err);
+    res.status(500).json({ message: "Gagal mengambil laporan akhir peserta" });
   }
 };
 
-/* ================= UPDATE STATUS LAPORAN AKHIR (UNTUK MENTOR) ================= */
-export const updateStatusLaporanAkhir = async (req: any, res: Response) => {
+/* ================= UPDATE STATUS & PENILAIAN LAPORAN AKHIR (HANYA 1x) ================= */
+export const updateStatusDanPenilaian = async (req: any, res: Response) => {
   try {
     const mentorId = req.user.id;
     const { id } = req.params;
-    const { status, mentorNote } = req.body;
+    const { status, mentorNote, penilaian } = req.body;
 
     // Validasi status
-    const validStatus = ["Menunggu", "Disetujui", "Ditolak", "Revisi"];
+    const validStatus = ["Menunggu", "Disetujui", "Ditolak"];
     if (!validStatus.includes(status)) {
-      return res.status(400).json({
-        message: "Status tidak valid",
-      });
+      return res.status(400).json({ message: "Status tidak valid" });
     }
 
-    const laporan = await LaporanAkhir.findById(id)
-      .populate("user", "email")
-      .lean();
+    const laporan = await LaporanAkhir.findById(id).populate("user", "email");
 
     if (!laporan) {
       return res.status(404).json({ message: "Laporan akhir tidak ditemukan" });
     }
 
-    // Verifikasi bahwa mentor adalah mentor dari peserta ini
+    // 🔥 CEK APAKAH SUDAH PERNAH DIREVIEW
+    if (laporan.status === "Disetujui" || laporan.status === "Ditolak") {
+      return res.status(400).json({
+        message: `Laporan ini sudah ${laporan.status === "Disetujui" ? "disetujui" : "ditolak"} dan tidak dapat diubah lagi`,
+      });
+    }
+
+    // Verifikasi mentor
     const valid = await Pendaftaran.findOne({
       "peserta.email": (laporan.user as any).email,
       "peserta.mentor": mentorId,
@@ -232,17 +277,54 @@ export const updateStatusLaporanAkhir = async (req: any, res: Response) => {
       });
     }
 
-    // Update laporan akhir
-    const updated = await LaporanAkhir.findByIdAndUpdate(
-      id,
-      {
-        status,
-        mentorNote: mentorNote || "",
-        approvedByMentor: status === "Disetujui" ? mentorId : null,
-        approvedAt: status === "Disetujui" ? new Date() : null,
-      },
-      { new: true },
-    )
+    // Update data
+    const updateData: any = {
+      status,
+      mentorNote: mentorNote || "",
+    };
+
+    if (status === "Disetujui") {
+      updateData.approvedByMentor = mentorId;
+      updateData.approvedAt = new Date();
+
+      // Validasi penilaian
+      if (penilaian) {
+        const requiredFields = [
+          "kehadiranDisiplin",
+          "sikapPerilaku",
+          "kemampuanKomunikasi",
+          "inisiatifTanggungJawab",
+          "kemampuanAdaptasi",
+          "pengetahuanTeknis",
+          "produktivitasKetepatanWaktu",
+          "kerjaSamaTim",
+        ];
+
+        const isValid = requiredFields.every(
+          (field) =>
+            penilaian[field] &&
+            ["sangat buruk", "buruk", "baik", "sangat baik"].includes(
+              penilaian[field],
+            ),
+        );
+
+        if (!isValid) {
+          return res.status(400).json({
+            message: "Semua penilaian harus diisi dengan valid",
+          });
+        }
+
+        updateData.penilaian = penilaian;
+      } else {
+        return res.status(400).json({
+          message: "Penilaian wajib diisi untuk menyetujui laporan",
+        });
+      }
+    }
+
+    const updated = await LaporanAkhir.findByIdAndUpdate(id, updateData, {
+      new: true,
+    })
       .populate("user", "name email")
       .populate("approvedByMentor", "name email");
 
@@ -256,45 +338,35 @@ export const updateStatusLaporanAkhir = async (req: any, res: Response) => {
   }
 };
 
-/* ================= APPROVE LAPORAN AKHIR (OLD VERSION - KEEP FOR COMPATIBILITY) ================= */
-export const approveLaporanAkhir = async (req: any, res: Response) => {
+/* ================= GET PENILAIAN PESERTA ================= */
+export const getPenilaianPeserta = async (req: any, res: Response) => {
   try {
-    const mentorId = req.user.id;
-    const { id } = req.params;
-    const { mentorNote } = req.body;
+    const userId = req.user.id;
 
-    const laporan = await LaporanAkhir.findById(id).populate("user");
+    const laporan = await LaporanAkhir.findOne({ user: userId }).populate(
+      "approvedByMentor",
+      "name email",
+    );
+
     if (!laporan) {
-      return res.status(404).json({ message: "Laporan akhir tidak ditemukan" });
+      return res.status(404).json({ message: "Laporan tidak ditemukan" });
     }
 
-    const valid = await Pendaftaran.findOne({
-      "peserta.email": (laporan.user as any).email,
-      "peserta.mentor": mentorId,
-    });
-
-    if (!valid) {
-      return res.status(403).json({
-        message: "Anda bukan mentor peserta ini",
+    if (laporan.status !== "Disetujui") {
+      return res.status(400).json({
+        message: "Penilaian hanya tersedia setelah laporan disetujui",
       });
     }
 
-    laporan.status = "Disetujui";
-    laporan.approvedByMentor = mentorId;
-    laporan.mentorNote = mentorNote;
-    laporan.approvedAt = new Date();
-    await laporan.save();
-
-    res.json({ message: "Disetujui", data: laporan });
-  } catch {
-    res.status(500).json({ message: "Gagal approve laporan akhir" });
+    res.json({
+      status: laporan.status,
+      approvedAt: laporan.approvedAt,
+      approvedBy: laporan.approvedByMentor,
+      mentorNote: laporan.mentorNote,
+      penilaian: laporan.penilaian || {},
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal mengambil penilaian" });
   }
 };
-
-/* ================= HELPER FUNCTION ================= */
-function section(doc: PDFKit.PDFDocument, title: string, content: string) {
-  doc.fontSize(13).text(title, { underline: true });
-  doc.moveDown(0.5);
-  doc.fontSize(11).text(content);
-  doc.moveDown(1.5);
-}

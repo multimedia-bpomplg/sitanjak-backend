@@ -1,3 +1,4 @@
+// middlewares/upload.middleware.ts
 import multer from "multer";
 import fs from "fs";
 import path from "path";
@@ -9,7 +10,42 @@ const ensureDir = (dir: string) => {
   }
 };
 
-/* ================== STORAGE ================== */
+/* ================== STORAGE LAPORAN AKHIR ================== */
+const storageLaporanAkhir = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/laporan-akhir";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const filename = `laporan-akhir-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+/* ================== FILTER PDF ================== */
+const pdfFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  if (file.mimetype !== "application/pdf") {
+    cb(new Error("Hanya file PDF yang diperbolehkan"));
+  } else {
+    cb(null, true);
+  }
+};
+
+/* ================== FILTER IMAGE/PDF ================== */
+const imagePdfFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  if (
+    file.mimetype.startsWith("image/") ||
+    file.mimetype === "application/pdf"
+  ) {
+    cb(null, true);
+  } else {
+    cb(new Error("Hanya gambar atau PDF yang diperbolehkan"));
+  }
+};
+
+/* ================== STORAGE SURAT ================== */
 const storagePengantar = multer.diskStorage({
   destination: (_req, _file, cb) => {
     const dir = "uploads/surat-pengantar";
@@ -48,9 +84,8 @@ const storageLogbook = multer.diskStorage({
   },
 });
 
-/* ================== STORAGE LOGBOOK (ALTERNATIVE) ================== */
 const storageLogbookAlt = multer.diskStorage({
-  destination: (_req, file, cb) => {
+  destination: (_req, _file, cb) => {
     const dir = "uploads/logbook";
     ensureDir(dir);
     cb(null, dir);
@@ -61,27 +96,6 @@ const storageLogbookAlt = multer.diskStorage({
     cb(null, filename);
   },
 });
-
-/* ================== FILTER PDF ================== */
-const pdfFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
-  if (file.mimetype !== "application/pdf") {
-    cb(new Error("Hanya file PDF yang diperbolehkan"));
-  } else {
-    cb(null, true);
-  }
-};
-
-/* ================== FILTER IMAGE/PDF ================== */
-const imagePdfFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
-  if (
-    file.mimetype.startsWith("image/") ||
-    file.mimetype === "application/pdf"
-  ) {
-    cb(null, true);
-  } else {
-    cb(new Error("Hanya gambar atau PDF yang diperbolehkan"));
-  }
-};
 
 /* ================== EXPORT ================== */
 export const uploadSuratPengantar = multer({
@@ -104,12 +118,20 @@ export const uploadLogbook = multer({
   },
 });
 
-/* ================== ALTERNATIVE LOGBOOK UPLOAD ================== */
 export const uploadLogbookAlt = multer({
   storage: storageLogbookAlt,
   fileFilter: imagePdfFilter,
   limits: {
     fileSize: 2 * 1024 * 1024,
     files: 5,
+  },
+});
+
+// 🔥 BARU: Upload Laporan Akhir
+export const uploadLaporanAkhir = multer({
+  storage: storageLaporanAkhir,
+  fileFilter: pdfFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
   },
 });
