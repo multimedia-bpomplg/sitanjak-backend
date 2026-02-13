@@ -48,11 +48,11 @@ export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
 
     const file = req.file;
 
-    // Validasi ukuran file (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validasi ukuran file (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
       fs.unlinkSync(file.path);
       return res.status(400).json({
-        message: "Ukuran file maksimal 10MB",
+        message: "Ukuran file maksimal 5MB",
       });
     }
 
