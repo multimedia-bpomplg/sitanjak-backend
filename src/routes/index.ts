@@ -12,6 +12,7 @@ import pesertaRoutes from "./peserta.route";
 import userRoutes from "./userRoutes";
 import overviewRoutes from "./overview.routes";
 import formasiRoutes from "./formasiRoutes";
+import suratSelesaiMagangRoutes from "./suratSelesaiMagangRoutes"; // ✅ IMPORT BARU
 
 const router = Router();
 
@@ -33,5 +34,6 @@ router.use("/peserta", pesertaRoutes);
 router.use("/users", userRoutes);
 router.use("/oversistem", overviewRoutes);
 router.use("/formasi", formasiRoutes);
+router.use("/surat-selesai", suratSelesaiMagangRoutes); // ✅ ROUTE BARU
 
 export default router;

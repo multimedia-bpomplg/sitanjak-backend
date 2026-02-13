@@ -97,6 +97,26 @@ const storageLogbookAlt = multer.diskStorage({
   },
 });
 
+/* ================= STORAGE SURAT SELESAI MAGANG ================= */
+const storageSuratSelesai = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/surat-selesai";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const filename = `surat-selesai-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+export const uploadSuratSelesaiMagang = multer({
+  storage: storageSuratSelesai,
+  fileFilter: pdfFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
+
 /* ================== EXPORT ================== */
 export const uploadSuratPengantar = multer({
   storage: storagePengantar,
