@@ -1,4 +1,4 @@
-// routes/superadminRoutes.ts
+// D:\Projek BPOM\backend-bpom\src\routes\superadminRoutes.ts
 import { Router } from "express";
 import {
   buatAkunPeserta,
@@ -27,10 +27,29 @@ import {
   enableMissedDay,
 } from "../controllers/superadminLogbookController";
 import { getPesertaDisetujui } from "../controllers/superadminPesertaController";
-import { getAllLaporanAkhir } from "../controllers/superadminLaporanAkhirController";
-import { getAllLaporanBulanan } from "../controllers/superadminLaporanBulananController";
+import {
+  getAllLaporanAkhir,
+  getLaporanAkhirById,
+  downloadLaporanAkhirPdf,
+  viewLaporanAkhirPdf,
+} from "../controllers/superadminLaporanAkhirController";
+
+// ✅ IMPORT CONTROLLER BARU
+import { downloadAllLaporanAkhirPDF } from "../controllers/superadminLaporanAkhirPDFController";
+import { downloadAllLaporanAkhirExcel } from "../controllers/superadminLaporanAkhirExcelController";
+
 import { updateStatusMagang } from "../controllers/superadminController";
 import { updateStatus } from "../controllers/pendaftaran.controller";
+
+// ✅ IMPORT FEEDBACK CONTROLLERS
+import {
+  getAllFeedback,
+  getFeedbackStatistics,
+  getFeedbackByUser,
+  getFeedbackDetail,
+  getPesertaFeedbackSummary,
+} from "../controllers/superadminFeedbackController";
+import { downloadAllFeedbackPDF } from "../controllers/superadminFeedbackPDFController";
 
 const router = Router();
 
@@ -175,19 +194,91 @@ router.get(
   getAllLaporanAkhir,
 );
 
-/* ================= LAPORAN BULANAN ================= */
 router.get(
-  "/laporan-bulanan",
+  "/laporan-akhir/:id",
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
-  getAllLaporanBulanan,
+  getLaporanAkhirById,
+);
+
+router.get(
+  "/laporan-akhir/download/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  downloadLaporanAkhirPdf,
+);
+
+router.get(
+  "/laporan-akhir/view/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  viewLaporanAkhirPdf,
+);
+
+// ✅ ROUTE DOWNLOAD ALL PDF
+router.post(
+  "/laporan-akhir/download-all-pdf",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  downloadAllLaporanAkhirPDF,
+);
+
+// ✅ ROUTE DOWNLOAD ALL EXCEL
+router.post(
+  "/laporan-akhir/download-all-excel",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  downloadAllLaporanAkhirExcel,
+);
+
+/* ================= FEEDBACK ================= */
+router.get(
+  "/feedback",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getAllFeedback,
+);
+
+router.get(
+  "/feedback/statistics",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getFeedbackStatistics,
+);
+
+router.get(
+  "/feedback/peserta-summary",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getPesertaFeedbackSummary,
+);
+
+router.get(
+  "/feedback/user/:userId",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getFeedbackByUser,
+);
+
+router.get(
+  "/feedback/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getFeedbackDetail,
+);
+
+router.post(
+  "/feedback/download-pdf",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  downloadAllFeedbackPDF,
 );
 
 /* ================= UPDATE STATUS MAGANG ================= */
 router.put(
   "/pendaftaran/:id/status-magang",
   authMiddleware,
-  roleMiddleware(["admin", "superadmin"]), // ✅ Hanya admin & superadmin
+  roleMiddleware(["admin", "superadmin"]),
   updateStatusMagang,
 );
 
@@ -196,7 +287,7 @@ router.put(
   "/pendaftaran/:id",
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
-  updateStatus, // ⬅️ INI YANG AUTO SET statusMagang
+  updateStatus,
 );
 
 export default router;

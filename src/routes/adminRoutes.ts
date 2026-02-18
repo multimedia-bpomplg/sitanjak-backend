@@ -32,7 +32,7 @@ import { getPesertaDisetujui } from "../controllers/superadminPesertaController"
 
 import { getAllLaporanAkhir } from "../controllers/superadminLaporanAkhirController";
 
-import { getAllLaporanBulanan } from "../controllers/superadminLaporanBulananController";
+// import { getAllLaporanBulanan } from "../controllers/superadminLaporanBulananController";
 
 import { uploadSuratBalasan } from "../middlewares/upload.middleware";
 
@@ -143,11 +143,11 @@ router.get(
   getAllLaporanAkhir,
 );
 
-router.get(
-  "/laporan-bulanan",
-  authMiddleware,
-  roleMiddleware(["admin", "superadmin"]),
-  getAllLaporanBulanan,
-);
+// router.get(
+//   "/laporan-bulanan",
+//   authMiddleware,
+//   roleMiddleware(["admin", "superadmin"]),
+//   getAllLaporanBulanan,
+// );
 
 export default router;
