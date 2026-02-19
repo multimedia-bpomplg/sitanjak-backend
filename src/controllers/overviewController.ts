@@ -15,7 +15,7 @@ import {
   startOfDay,
   endOfDay,
   eachDayOfInterval,
-  getDaysInMonth,
+  getDaysInMonth as getDaysInMonthFromDateFns, // RENAME IMPORT
 } from "date-fns";
 
 /* ================= GET REAL-TIME STATS (REAL-TIME VERSION) ================= */
@@ -25,8 +25,6 @@ export const getOverviewStats = async (req: Request, res: Response) => {
     const todayStart = startOfDay(today);
     const todayEnd = endOfDay(today);
     const todayStr = format(today, "yyyy-MM-dd");
-
-    console.log("📊 Generating REAL-TIME overview stats for:", todayStr);
 
     // 1. Hitung peserta aktif dari User dengan role peserta
     const pesertaRole = await Role.findOne({ name: "peserta" });
@@ -82,16 +80,6 @@ export const getOverviewStats = async (req: Request, res: Response) => {
     // 8. Total semua pendaftaran (termasuk yang belum disetujui)
     const totalPendaftar = await Pendaftaran.countDocuments();
 
-    console.log("📈 REAL-TIME Stats calculated:");
-    console.log("- Peserta Aktif:", pesertaAktif);
-    console.log("- Mentor Aktif:", mentorAktif);
-    console.log("- Admin Aktif:", adminAktif);
-    console.log("- Pendaftaran Hari Ini:", pendaftaranHariIni);
-    console.log("- Total Pendaftaran Disetujui:", totalPendaftaranDisetujui);
-    console.log("- Logbook Hari Ini:", logbookHariIni);
-    console.log("- Total Logbook:", totalLogbook);
-    console.log("- Total Pendaftar:", totalPendaftar);
-
     // Statistik tambahan - HANYA jika ada data
     let statistikPosisi = [];
     let statistikAsal = [];
@@ -103,7 +91,7 @@ export const getOverviewStats = async (req: Request, res: Response) => {
 
     if (totalDisetujui > 0) {
       // Hanya query jika ada data
-      [statistikPosisi, statistikAsal, statistikGender] = await Promise.all([
+      const results = await Promise.allSettled([
         Pendaftaran.aggregate([
           { $unwind: "$peserta" },
           {
@@ -116,7 +104,7 @@ export const getOverviewStats = async (req: Request, res: Response) => {
           { $project: { posisi: "$_id", count: 1, _id: 0 } },
           { $sort: { count: -1 } },
           { $limit: 10 },
-        ]).catch(() => []), // Return empty array if error
+        ]),
 
         Pendaftaran.aggregate([
           { $unwind: "$peserta" },
@@ -129,7 +117,7 @@ export const getOverviewStats = async (req: Request, res: Response) => {
           { $group: { _id: "$peserta.asal.jenis", count: { $sum: 1 } } },
           { $project: { jenis: "$_id", count: 1, _id: 0 } },
           { $sort: { count: -1 } },
-        ]).catch(() => []),
+        ]),
 
         Pendaftaran.aggregate([
           { $unwind: "$peserta" },
@@ -141,8 +129,14 @@ export const getOverviewStats = async (req: Request, res: Response) => {
           },
           { $group: { _id: "$peserta.jenisKelamin", count: { $sum: 1 } } },
           { $project: { gender: "$_id", count: 1, _id: 0 } },
-        ]).catch(() => []),
+        ]),
       ]);
+
+      statistikPosisi =
+        results[0].status === "fulfilled" ? results[0].value : [];
+      statistikAsal = results[1].status === "fulfilled" ? results[1].value : [];
+      statistikGender =
+        results[2].status === "fulfilled" ? results[2].value : [];
     }
 
     // Simpan ke database untuk histori (opsional)
@@ -171,7 +165,6 @@ export const getOverviewStats = async (req: Request, res: Response) => {
         await OverviewStats.create(overviewData);
       }
     } catch (dbError) {
-      console.warn("⚠️ Could not save to overview stats:", dbError);
       // Continue without saving, not critical
     }
 
@@ -195,7 +188,6 @@ export const getOverviewStats = async (req: Request, res: Response) => {
           : "empty",
     });
   } catch (error) {
-    console.error("❌ Error getting overview stats:", error);
     res.status(500).json({
       message: "Gagal mengambil data overview",
       error: error instanceof Error ? error.message : "Unknown error",
@@ -214,8 +206,6 @@ export const getTimeSeriesData = async (req: Request, res: Response) => {
 
     const startDate = new Date(selectedYear, 0, 1);
     const endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
-
-    console.log(`📅 Fetching REAL-TIME time series for year: ${selectedYear}`);
 
     // 1. DATA PENDAFTARAN PER BULAN - HANYA data yang ada
     const pendaftaranAggregation = await Pendaftaran.aggregate([
@@ -425,12 +415,9 @@ export const getTimeSeriesData = async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`✅ Generated ${formattedData.length} monthly records`);
-
     // Jika tidak ada data sama sekali, return array kosong
     res.json(formattedData);
   } catch (error) {
-    console.error("❌ Error getting time series data:", error);
     res.status(500).json({
       message: "Gagal mengambil data time series",
       error: error instanceof Error ? error.message : "Unknown error",
@@ -451,10 +438,6 @@ export const getDetailedTimeSeries = async (req: Request, res: Response) => {
 
     const startDate = new Date(selectedYear, selectedMonth - 1, 1);
     const endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
-
-    console.log(
-      `📅 Fetching REAL-TIME daily data for: ${selectedYear}-${selectedMonth}`,
-    );
 
     // 1. PENDAFTARAN HARIAN - HANYA hari yang ada data
     const dailyPendaftaran = await Pendaftaran.aggregate([
@@ -537,12 +520,8 @@ export const getDetailedTimeSeries = async (req: Request, res: Response) => {
       },
     ]);
 
-    console.log(
-      `📊 Raw data - Pendaftaran: ${dailyPendaftaran.length}, Logbook: ${dailyLogbook.length}`,
-    );
-
     // Generate data untuk setiap hari - HANYA hari yang ada data
-    const daysInMonth = getDaysInMonth(startDate);
+    const daysInMonth = getDaysInMonthFromDateFns(startDate); // GUNAKAN FUNGSI YANG SUDAH DI-RENAME
     const formattedData = [];
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -569,12 +548,9 @@ export const getDetailedTimeSeries = async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`✅ Generated ${formattedData.length} daily records`);
-
     // Return array kosong jika tidak ada data
     res.json(formattedData);
   } catch (error) {
-    console.error("❌ Error getting detailed time series:", error);
     res.status(500).json({
       message: "Gagal mengambil data detail time series",
       error: error instanceof Error ? error.message : "Unknown error",
@@ -602,7 +578,6 @@ export const getStatistikPosisi = async (req: Request, res: Response) => {
     // Return empty array jika tidak ada data
     res.json(posisiAggregation.length > 0 ? posisiAggregation : []);
   } catch (error) {
-    console.error("Error getting posisi statistik:", error);
     res.status(500).json({
       message: "Gagal mengambil statistik posisi",
       data: [], // Return empty array on error
@@ -627,7 +602,6 @@ export const getStatistikAsal = async (req: Request, res: Response) => {
 
     res.json(asalAggregation.length > 0 ? asalAggregation : []);
   } catch (error) {
-    console.error("Error getting asal statistik:", error);
     res.status(500).json({
       message: "Gagal mengambil statistik asal",
       data: [],
@@ -652,7 +626,6 @@ export const getStatistikGender = async (req: Request, res: Response) => {
 
     res.json(genderAggregation.length > 0 ? genderAggregation : []);
   } catch (error) {
-    console.error("Error getting gender statistik:", error);
     res.status(500).json({
       message: "Gagal mengambil statistik gender",
       data: [],
@@ -754,7 +727,6 @@ export const getStatistikSelesai = async (req: Request, res: Response) => {
 
     res.json(selesaiAggregation.length > 0 ? selesaiAggregation : []);
   } catch (error) {
-    console.error("Error getting selesai statistik:", error);
     res.status(500).json({
       message: "Gagal mengambil statistik selesai",
       data: [],
@@ -809,7 +781,6 @@ export const getAvailableYears = async (req: Request, res: Response) => {
 
     res.json(years);
   } catch (error) {
-    console.error("Error getting available years:", error);
     // Return default years
     const currentYear = new Date().getFullYear();
     res.json([currentYear]);
@@ -870,7 +841,6 @@ export const exportOverviewData = async (req: Request, res: Response) => {
       dataStatus: timeSeriesData.length > 0 ? "available" : "empty",
     });
   } catch (error) {
-    console.error("Error exporting overview data:", error);
     res.status(500).json({
       message: "Gagal mengekspor data",
       error: error instanceof Error ? error.message : "Unknown error",
@@ -889,10 +859,6 @@ export const getLogbookStatistics = async (req: Request, res: Response) => {
     const startDate = new Date(selectedYear, 0, 1);
     const endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
 
-    console.log(
-      `📝 Fetching REAL-TIME logbook stats for year: ${selectedYear}`,
-    );
-
     // Cek apakah ada data logbook untuk tahun ini
     const hasLogbookData = await Logbook.exists({
       $or: [
@@ -907,7 +873,6 @@ export const getLogbookStatistics = async (req: Request, res: Response) => {
     });
 
     if (!hasLogbookData) {
-      console.log(`ℹ️ No logbook data found for year ${selectedYear}`);
       return res.json({
         monthly: [],
         byStatus: [],
@@ -1106,7 +1071,6 @@ export const getLogbookStatistics = async (req: Request, res: Response) => {
       dataStatus: "available",
     });
   } catch (error) {
-    console.error("Error getting logbook statistics:", error);
     res.status(500).json({
       message: "Gagal mengambil statistik logbook",
       dataStatus: "error",
@@ -1125,17 +1089,12 @@ export const getPendaftaranStatistics = async (req: Request, res: Response) => {
     const startDate = new Date(selectedYear, 0, 1);
     const endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
 
-    console.log(
-      `📋 Fetching REAL-TIME pendaftaran stats for year: ${selectedYear}`,
-    );
-
     // Cek apakah ada data pendaftaran untuk tahun ini
     const hasPendaftaranData = await Pendaftaran.exists({
       createdAt: { $gte: startDate, $lte: endDate },
     });
 
     if (!hasPendaftaranData) {
-      console.log(`ℹ️ No pendaftaran data found for year ${selectedYear}`);
       return res.json({
         monthly: [],
         byStatus: [],
@@ -1273,7 +1232,6 @@ export const getPendaftaranStatistics = async (req: Request, res: Response) => {
       dataStatus: "available",
     });
   } catch (error) {
-    console.error("Error getting pendaftaran statistics:", error);
     res.status(500).json({
       message: "Gagal mengambil statistik pendaftaran",
       dataStatus: "error",
@@ -1315,7 +1273,6 @@ export const verifyDataSync = async (req: Request, res: Response) => {
       dataStatus: hasTodayData ? "available" : "no_data_today",
     });
   } catch (error) {
-    console.error("Error verifying data sync:", error);
     res.status(500).json({
       message: "Gagal memverifikasi sinkronisasi data",
       status: "error",
@@ -1360,6 +1317,23 @@ export const checkDataAvailability = async (req: Request, res: Response) => {
       createdAt: { $gte: startDate, $lte: endDate },
     });
 
+    // Hitung total records
+    const totalPendaftaran = await Pendaftaran.countDocuments({
+      createdAt: { $gte: startDate, $lte: endDate },
+    });
+
+    const totalLogbook = await Logbook.countDocuments({
+      $or: [
+        { createdAt: { $gte: startDate, $lte: endDate } },
+        {
+          date: {
+            $gte: format(startDate, "yyyy-MM-dd"),
+            $lte: format(endDate, "yyyy-MM-dd"),
+          },
+        },
+      ],
+    });
+
     res.json({
       year: selectedYear,
       month: selectedMonth,
@@ -1367,20 +1341,8 @@ export const checkDataAvailability = async (req: Request, res: Response) => {
       hasLogbook: !!hasLogbook,
       hasUsers: !!hasUsers,
       totalRecords: {
-        pendaftaran: await Pendaftaran.countDocuments({
-          createdAt: { $gte: startDate, $lte: endDate },
-        }),
-        logbook: await Logbook.countDocuments({
-          $or: [
-            { createdAt: { $gte: startDate, $lte: endDate } },
-            {
-              date: {
-                $gte: format(startDate, "yyyy-MM-dd"),
-                $lte: format(endDate, "yyyy-MM-dd"),
-              },
-            },
-          ],
-        }),
+        pendaftaran: totalPendaftaran,
+        logbook: totalLogbook,
       },
       message:
         hasPendaftaran || hasLogbook || hasUsers
@@ -1390,7 +1352,6 @@ export const checkDataAvailability = async (req: Request, res: Response) => {
         hasPendaftaran || hasLogbook || hasUsers ? "available" : "empty",
     });
   } catch (error) {
-    console.error("Error checking data availability:", error);
     res.status(500).json({
       message: "Gagal memeriksa ketersediaan data",
       dataStatus: "error",
@@ -1421,7 +1382,6 @@ export const getApiStatus = async (req: Request, res: Response) => {
         : "API is running but database is disconnected",
     });
   } catch (error) {
-    console.error("Error getting API status:", error);
     res.status(500).json({
       status: "error",
       message: "Failed to get API status",
@@ -1438,6 +1398,10 @@ const getCurrentStats = async () => {
     const todayStart = startOfDay(today);
     const todayEnd = endOfDay(today);
 
+    const pesertaRoleId = await getRoleId("peserta");
+    const mentorRoleId = await getRoleId("mentor");
+    const adminRoleId = await getRoleId("admin");
+
     const [
       pesertaAktif,
       mentorAktif,
@@ -1450,13 +1414,13 @@ const getCurrentStats = async () => {
     ] = await Promise.all([
       User.countDocuments({
         status: "Aktif",
-        roles: await getRoleId("peserta"),
+        roles: pesertaRoleId,
       }),
       User.countDocuments({
         status: "Aktif",
-        roles: await getRoleId("mentor"),
+        roles: mentorRoleId,
       }),
-      User.countDocuments({ status: "Aktif", roles: await getRoleId("admin") }),
+      User.countDocuments({ status: "Aktif", roles: adminRoleId }),
       Pendaftaran.countDocuments({
         status: "Disetujui",
         createdAt: { $gte: todayStart, $lte: todayEnd },
@@ -1484,7 +1448,6 @@ const getCurrentStats = async () => {
       lastUpdated: new Date().toISOString(),
     };
   } catch (error) {
-    console.error("Error getting current stats:", error);
     return null;
   }
 };
@@ -1496,7 +1459,6 @@ const getRoleId = async (
     const role = await Role.findOne({ name: roleName });
     return role?._id || null;
   } catch (error) {
-    console.error(`Error getting role ID for ${roleName}:`, error);
     return null;
   }
 };
@@ -1518,7 +1480,6 @@ const getStatistikPosisiData = async () => {
     ]);
     return data;
   } catch (error) {
-    console.error("Error in getStatistikPosisiData:", error);
     return [];
   }
 };
@@ -1538,7 +1499,6 @@ const getStatistikAsalData = async () => {
     ]);
     return data;
   } catch (error) {
-    console.error("Error in getStatistikAsalData:", error);
     return [];
   }
 };
@@ -1558,7 +1518,6 @@ const getStatistikGenderData = async () => {
     ]);
     return data;
   } catch (error) {
-    console.error("Error in getStatistikGenderData:", error);
     return [];
   }
 };
@@ -1655,14 +1614,6 @@ const getStatistikSelesaiData = async () => {
     ]);
     return data;
   } catch (error) {
-    console.error("Error in getStatistikSelesaiData:", error);
     return [];
   }
-};
-
-// Helper untuk getDaysInMonth
-const getDaysInMonth = (date: Date): number => {
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
-  return new Date(year, month, 0).getDate();
 };
