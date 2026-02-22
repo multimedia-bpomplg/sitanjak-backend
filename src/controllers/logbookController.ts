@@ -22,7 +22,7 @@ export const createLogbook = async (req: any, res: Response) => {
 
     // Proses file upload
     const images: string[] = [];
-    let pdfFilePath: string | null = null;
+    let pdfFilePath: string | undefined = undefined;
 
     uploaded?.files?.forEach((f) => {
       images.push(`uploads/logbook/image/${f.filename}`);
@@ -664,7 +664,7 @@ export const submitRevision = async (req: any, res: Response) => {
     };
 
     const newImages: string[] = [];
-    let newPdfFile: string | null = null;
+    let newPdfFile: string | undefined = undefined;
 
     uploaded?.files?.forEach((f) => {
       newImages.push(`uploads/logbook/image/${f.filename}`);

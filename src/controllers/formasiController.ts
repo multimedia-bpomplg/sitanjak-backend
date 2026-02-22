@@ -88,3 +88,60 @@ export const getFormasi = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getPrediksiFormasi = async (req: Request, res: Response) => {
+  try {
+    const data = await Pendaftaran.find({
+      status: "Disetujui",
+      "peserta.statusMagang": {
+        $in: ["Sedang Magang", "Belum Waktu Magang"],
+      },
+    });
+
+    const map: any = {};
+
+    data.forEach((d) => {
+      d.peserta.forEach((p) => {
+        if (
+          ["Sedang Magang", "Belum Waktu Magang"].includes(p.statusMagang || "")
+        ) {
+          const posisi = p.posisi;
+          const selesai = new Date(p.tanggalSelesaiMagang);
+
+          if (!map[posisi]) {
+            map[posisi] = [];
+          }
+
+          map[posisi].push(selesai);
+        }
+      });
+    });
+
+    const result: any = {};
+
+    Object.keys(map).forEach((posisi) => {
+      const dates = map[posisi].sort(
+        (a: Date, b: Date) => a.getTime() - b.getTime(),
+      );
+
+      const first = dates[0];
+
+      const count = dates.filter(
+        (d: Date) => d.getTime() === first.getTime(),
+      ).length;
+
+      const availableDate = new Date(first);
+      availableDate.setDate(availableDate.getDate() + 1);
+
+      result[posisi] = {
+        slotAkanKosong: count,
+        tersediaMulai: availableDate,
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal ambil prediksi" });
+  }
+};

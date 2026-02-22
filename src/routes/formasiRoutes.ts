@@ -1,8 +1,12 @@
 import { Router } from "express";
-import { getFormasi } from "../controllers/formasiController";
+import {
+  getFormasi,
+  getPrediksiFormasi,
+} from "../controllers/formasiController";
 
 const router = Router();
 
 router.get("/", getFormasi);
+router.get("/prediksi", getPrediksiFormasi);
 
 export default router;
