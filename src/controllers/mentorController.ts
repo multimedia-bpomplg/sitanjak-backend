@@ -5,6 +5,7 @@ import Role from "../models/Role";
 import { sendEmail } from "../utils/sendEmail";
 import { mentorEmailTemplate } from "../utils/mentorEmailTemplate";
 import Pendaftaran from "../models/pendaftaran";
+import Logbook from "../models/Logbook";
 
 /* ================= BUAT AKUN MENTOR + EMAIL ================= */
 export const buatMentor = async (req: Request, res: Response) => {
@@ -187,7 +188,7 @@ export const getPesertaDetail = async (req: Request, res: Response) => {
 };
 
 // Di MentorController.js
-export const getLogbookPesertaByDate = async (req, res) => {
+export const getLogbookPesertaByDate = async (req: Request, res: Response) => {
   try {
     const { userId, date } = req.params;
 

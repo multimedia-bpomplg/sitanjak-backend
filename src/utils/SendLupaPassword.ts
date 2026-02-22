@@ -1,16 +1,20 @@
 import nodemailer from "nodemailer";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
 
 export const SendLupaPassword = async (to: string, otp: string) => {
-  const transporter = nodemailer.createTransport({
+  // ✅ Config SMTP + extend family
+  const config: SMTPTransport.Options & { family?: number } = {
     host: "smtp.gmail.com",
     port: 465,
-    secure: true, // SSL
+    secure: true,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    family: 4, // ⬅️ PAKSA IPv4 (INI KUNCI UTAMA)
-  });
+    family: 4,
+  };
+
+  const transporter = nodemailer.createTransport(config);
 
   await transporter.sendMail({
     from: `"BPOM System" <${process.env.EMAIL_USER}>`,

@@ -38,7 +38,20 @@ export const uploadSuratSelesaiMagang = async (req: any, res: Response) => {
       });
     }
 
+    // Pastikan peserta ada
+    if (!pendaftaran.peserta || pendaftaran.peserta.length === 0) {
+      return res.status(404).json({
+        message: "Data peserta tidak ditemukan di pendaftaran",
+      });
+    }
+
     const peserta = pendaftaran.peserta.find((p: any) => p.email === email);
+
+    if (!peserta) {
+      return res.status(404).json({
+        message: "Peserta tidak ditemukan",
+      });
+    }
 
     // Buat record surat selesai magang
     const surat = await SuratSelesaiMagang.create({

@@ -111,7 +111,7 @@ export const getOverviewStats = async (req: Request, res: Response) => {
           {
             $match: {
               status: "Disetujui",
-              "peserta.asal.jenis": { $exists: true, $ne: null, $ne: "" },
+              "peserta.asal.jenis": { $exists: true, $nin: [null, ""] },
             },
           },
           { $group: { _id: "$peserta.asal.jenis", count: { $sum: 1 } } },
@@ -124,7 +124,7 @@ export const getOverviewStats = async (req: Request, res: Response) => {
           {
             $match: {
               status: "Disetujui",
-              "peserta.jenisKelamin": { $exists: true, $ne: null, $ne: "" },
+              "peserta.jenisKelamin": { $exists: true, $nin: [null, ""] },
             },
           },
           { $group: { _id: "$peserta.jenisKelamin", count: { $sum: 1 } } },
@@ -566,7 +566,7 @@ export const getStatistikPosisi = async (req: Request, res: Response) => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.posisi": { $exists: true, $ne: null, $ne: "" },
+          "peserta.posisi": { $exists: true, $nin: [null, ""] },
         },
       },
       { $group: { _id: "$peserta.posisi", count: { $sum: 1 } } },
@@ -593,7 +593,7 @@ export const getStatistikAsal = async (req: Request, res: Response) => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.asal.jenis": { $exists: true, $ne: null, $ne: "" },
+          "peserta.asal.jenis": { $exists: true, $nin: [null, ""] },
         },
       },
       { $group: { _id: "$peserta.asal.jenis", count: { $sum: 1 } } },
@@ -617,7 +617,7 @@ export const getStatistikGender = async (req: Request, res: Response) => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.jenisKelamin": { $exists: true, $ne: null, $ne: "" },
+          "peserta.jenisKelamin": { $exists: true, $nin: [null, ""] },
         },
       },
       { $group: { _id: "$peserta.jenisKelamin", count: { $sum: 1 } } },
@@ -644,8 +644,7 @@ export const getStatistikSelesai = async (req: Request, res: Response) => {
           status: "Disetujui",
           "peserta.tanggalSelesaiMagang": {
             $exists: true,
-            $ne: null,
-            $ne: "",
+            $nin: [null, ""],
             $type: "string",
           },
         },
@@ -820,7 +819,11 @@ export const exportOverviewData = async (req: Request, res: Response) => {
       ),
       Pendaftaran.countDocuments({
         status: "Disetujui",
-        "peserta.tanggalSelesaiMagang": { $exists: true, $ne: null, $ne: "" },
+        "peserta.tanggalSelesaiMagang": {
+          $exists: true,
+          $nin: [null, ""],
+          $type: "string",
+        },
       }).then((count) => (count > 0 ? getStatistikSelesaiData() : [])),
     ]);
 
@@ -1177,7 +1180,7 @@ export const getPendaftaranStatistics = async (req: Request, res: Response) => {
             $gte: startDate,
             $lte: endDate,
           },
-          kategori: { $exists: true, $ne: null, $ne: "" },
+          kategori: { $exists: true, $nin: [null, ""] },
         },
       },
       {
@@ -1206,7 +1209,7 @@ export const getPendaftaranStatistics = async (req: Request, res: Response) => {
       },
       {
         $match: {
-          "peserta.posisi": { $exists: true, $ne: null, $ne: "" },
+          "peserta.posisi": { $exists: true, $nin: [null, ""] },
         },
       },
       {
@@ -1471,7 +1474,7 @@ const getStatistikPosisiData = async () => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.posisi": { $exists: true, $ne: null, $ne: "" },
+          "peserta.posisi": { $exists: true, $nin: [null, ""] },
         },
       },
       { $group: { _id: "$peserta.posisi", count: { $sum: 1 } } },
@@ -1491,7 +1494,7 @@ const getStatistikAsalData = async () => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.asal.jenis": { $exists: true, $ne: null, $ne: "" },
+          "peserta.asal.jenis": { $exists: true, $nin: [null, ""] },
         },
       },
       { $group: { _id: "$peserta.asal.jenis", count: { $sum: 1 } } },
@@ -1510,7 +1513,7 @@ const getStatistikGenderData = async () => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.jenisKelamin": { $exists: true, $ne: null, $ne: "" },
+          "peserta.jenisKelamin": { $exists: true, $nin: [null, ""] },
         },
       },
       { $group: { _id: "$peserta.jenisKelamin", count: { $sum: 1 } } },
@@ -1532,8 +1535,7 @@ const getStatistikSelesaiData = async () => {
           status: "Disetujui",
           "peserta.tanggalSelesaiMagang": {
             $exists: true,
-            $ne: null,
-            $ne: "",
+            $nin: [null, ""],
             $type: "string",
           },
         },

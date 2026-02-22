@@ -86,7 +86,7 @@ export const enableMissedDay = async (req: any, res: Response) => {
       isMissedDay: true,
       enabledBy: superadminId,
       enabledAt: new Date(),
-    });
+    } as any);
 
     res.status(201).json({
       success: true,

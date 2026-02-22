@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import User from "../models/User";
 import { sendEmail } from "../utils/sendEmail";
 import { passwordChangedEmail } from "../utils/ALERTEmail";
+import Pendaftaran from "../models/pendaftaran";
 
 /* ======================================================
    GET DATA PESERTA LOGIN (PROFILE PESERTA)
@@ -16,13 +17,13 @@ export const getPesertaMe = async (req: any, res: Response) => {
 
     // Ambil data user (tanpa password)
     const user = await User.findById(userId).select(
-      "name email roles posisiMagang"
+      "name email roles posisiMagang",
     );
 
     // Ambil data pendaftaran + mentor (jika ada)
     const pendaftaran = await Pendaftaran.findOne({ user: userId }).populate(
       "mentor",
-      "name email posisiMentor"
+      "name email posisiMentor",
     );
 
     // Kirim response ke frontend

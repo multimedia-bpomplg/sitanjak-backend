@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import Formasi from "../models/formasi.model";
+import Formasi from "../models/Formasi";
 
 dotenv.config();
 

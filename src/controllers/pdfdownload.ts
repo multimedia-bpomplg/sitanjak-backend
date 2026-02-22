@@ -96,7 +96,7 @@ export const downloadAllLogbookPDF = async (req: any, res: Response) => {
     }
 
     doc.end();
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[DOWNLOAD PDF]", err);
 
     res.status(500).json({
@@ -178,7 +178,7 @@ export const downloadLogbookByUserPDF = async (req: any, res: Response) => {
     }
 
     doc.end();
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[DOWNLOAD USER PDF]", err);
 
     res.status(500).json({
@@ -320,12 +320,14 @@ export const downloadLogbookByMentorPDF = async (req: any, res: Response) => {
     }
 
     doc.end();
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("🔥 MENTOR PDF ERROR:", err);
+
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
 
     res.status(500).json({
       message: "Server error saat membuat PDF",
-      error: err.message,
+      error: errorMessage,
     });
   }
 };

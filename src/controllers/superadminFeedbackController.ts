@@ -100,13 +100,20 @@ export const getPesertaFeedbackSummary = async (req: any, res: Response) => {
     feedbackList.forEach((feedback) => {
       if (!feedback.user) return;
 
-      const userId = feedback.user._id.toString();
+      const user =
+        typeof feedback.user === "object" && "name" in feedback.user
+          ? (feedback.user as any)
+          : null;
+
+      if (!user) return;
+
+      const userId = user._id.toString();
 
       if (!pesertaMap.has(userId)) {
         pesertaMap.set(userId, {
           _id: userId,
-          name: feedback.user.name,
-          email: feedback.user.email,
+          name: user.name,
+          email: user.email,
           totalFeedback: 0,
           sentToMentor: 0,
           notSentToMentor: 0,

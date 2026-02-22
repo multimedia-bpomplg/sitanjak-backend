@@ -99,7 +99,7 @@ export const createPendaftaran = async (req: Request, res: Response) => {
         email: p.email,
         wa: p.wa,
 
-        mentor: null,
+        mentor: undefined,
       };
     });
 
@@ -381,7 +381,20 @@ export const setMentorPeserta = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Peserta tidak ditemukan" });
     }
 
+    // ✅ Pastikan peserta ada
+    if (!pendaftaran.peserta || pendaftaran.peserta.length === 0) {
+      return res.status(400).json({
+        message: "Data peserta tidak tersedia",
+      });
+    }
+
     const peserta = pendaftaran.peserta.find((p: any) => p.email === email);
+
+    if (!peserta) {
+      return res.status(404).json({
+        message: "Peserta tidak ditemukan",
+      });
+    }
 
     peserta.mentor = mentorId;
 

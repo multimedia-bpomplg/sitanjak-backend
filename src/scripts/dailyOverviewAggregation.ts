@@ -86,7 +86,7 @@ const runDailyAggregation = async () => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.posisi": { $exists: true, $ne: null, $ne: "" },
+          "peserta.posisi": { $exists: true, $nin: [null, ""] },
         },
       },
       { $group: { _id: "$peserta.posisi", count: { $sum: 1 } } },
@@ -101,7 +101,10 @@ const runDailyAggregation = async () => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.asal.jenis": { $exists: true, $ne: null, $ne: "" },
+          "peserta.asal.jenis": {
+            $exists: true,
+            $nin: [null, ""],
+          },
         },
       },
       { $group: { _id: "$peserta.asal.jenis", count: { $sum: 1 } } },
@@ -115,7 +118,10 @@ const runDailyAggregation = async () => {
       {
         $match: {
           status: "Disetujui",
-          "peserta.jenisKelamin": { $exists: true, $ne: null, $ne: "" },
+          "peserta.jenisKelamin": {
+            $exists: true,
+            $nin: [null, ""],
+          },
         },
       },
       { $group: { _id: "$peserta.jenisKelamin", count: { $sum: 1 } } },
@@ -126,19 +132,17 @@ const runDailyAggregation = async () => {
     const hasData = newPendaftaran > 0 || logbookYesterday > 0;
     const dataStatus = hasData ? "available" : "empty";
 
-    // Data untuk kemarin (REAL-TIME)
     const overviewData = {
       date: yesterdayStart,
       logbook: logbookYesterday,
       pendaftaran: newPendaftaran,
-      peserta_aktif: pesertaAktif,
-      mentor_aktif: mentorAktif,
-      admin_aktif: adminAktif,
 
-      // Real-time stats
+      // ✅ SAMAKAN FORMAT (camelCase)
       pesertaAktif,
       mentorAktif,
       adminAktif,
+
+      // Real-time stats
       pendaftaranAktif: totalPendaftaranDisetujui,
       pendaftaranHariIni: newPendaftaran,
       logbookHariIni: logbookYesterday,
