@@ -155,3 +155,23 @@ export const uploadLaporanAkhir = multer({
     fileSize: 5 * 1024 * 1024, // 5MB
   },
 });
+
+// STORAGE BANNER
+const storageBanner = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/announcements";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `banner-${Date.now()}${ext}`);
+  },
+});
+
+export const uploadBanner = multer({
+  storage: storageBanner,
+  fileFilter: imagePdfFilter,
+  limits: { fileSize: 3 * 1024 * 1024 },
+});

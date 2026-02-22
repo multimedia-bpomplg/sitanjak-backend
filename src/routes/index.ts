@@ -1,4 +1,3 @@
-// routes/index.ts (Updated)
 import { Router } from "express";
 import authRoutes from "./authRoutes";
 import superadminRoutes from "./superadminRoutes";
@@ -13,6 +12,8 @@ import overviewRoutes from "./overview.routes";
 import formasiRoutes from "./formasiRoutes";
 import suratSelesaiMagangRoutes from "./suratSelesaiMagangRoutes";
 import feedbackRoutes from "./FeedbackRoutes";
+import whatsappRoutes from "./whatsappRoutes";
+import announcementRoutes from "./announcementRoutes";
 
 const router = Router();
 
@@ -35,5 +36,7 @@ router.use("/oversistem", overviewRoutes);
 router.use("/formasi", formasiRoutes);
 router.use("/surat-selesai", suratSelesaiMagangRoutes);
 router.use("/feedback", feedbackRoutes);
+router.use("/whatsapp", whatsappRoutes);
+router.use("/announcements", announcementRoutes);
 
 export default router;
