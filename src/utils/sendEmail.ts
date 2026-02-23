@@ -24,7 +24,7 @@ export const sendEmail = async ({
   });
 
   await transporter.sendMail({
-    from: `"Simaggo Admin" <${process.env.EMAIL_USER}>`,
+    from: `"Sitanjak ADMIN!" <${process.env.EMAIL_USER}>`,
     to,
     subject,
     html,

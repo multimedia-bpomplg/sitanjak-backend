@@ -2,6 +2,11 @@ import { Request, Response } from "express";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import { Multer } from "multer";
+import { sendEmail } from "../utils/sendEmail";
+import {
+  diterimaMagangEmail,
+  ditolakMagangEmail,
+} from "../utils/statusMagangEmail";
 
 /* ================= TYPE UNTUK MULTER ================= */
 interface MulterRequest extends Request {
@@ -242,7 +247,7 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
       });
     }
 
-    // Cari data dulu
+    // Cari data
     const pendaftaran = await Pendaftaran.findById(req.params.id);
 
     if (!pendaftaran) {
@@ -251,54 +256,88 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
       });
     }
 
-    // ================= UPDATE STATUS PENDAFTARAN =================
+    /* ================= UPDATE DATA ================= */
+
     pendaftaran.status = status;
     pendaftaran.jawabanAdmin = jawabanAdmin;
 
-    // ================= SIMPAN SURAT BALASAN =================
     if (req.file) {
       pendaftaran.suratBalasan = `surat-balasan/${req.file.filename}`;
     }
 
-    // ================= AUTO STATUS MAGANG =================
+    /* ================= UPDATE STATUS MAGANG ================= */
+
+    const today = new Date();
+
     if (status === "Disetujui") {
-      const today = new Date();
-
       pendaftaran.peserta.forEach((p) => {
-        if (p.statusMagang === "Selesai Magang") return;
-
         const start = new Date(p.tanggalMulaiMagang);
         const end = new Date(p.tanggalSelesaiMagang);
 
-        // ✅ BELUM MULAI = BELUM WAKTU MAGANG
         if (today < start) {
           p.statusMagang = "Belum Waktu Magang";
-        }
-
-        // ✅ SEDANG MAGANG
-        else if (today >= start && today <= end) {
+        } else if (today >= start && today <= end) {
           p.statusMagang = "Sedang Magang";
-        }
-
-        // ✅ SELESAI
-        else {
+        } else {
           p.statusMagang = "Selesai Magang";
         }
       });
     }
 
-    // Kalau ditolak
     if (status === "Ditolak") {
       pendaftaran.peserta.forEach((p) => {
         p.statusMagang = "Tidak Magang";
       });
     }
 
-    // Simpan
+    /* ================= SIMPAN ================= */
+
     await pendaftaran.save();
 
+    /* ================= KIRIM EMAIL ================= */
+
+    for (const peserta of pendaftaran.peserta) {
+      try {
+        // 👉 Kalau DISETUJUI
+        if (status === "Disetujui") {
+          const emailData = diterimaMagangEmail({
+            name: peserta.nama,
+            email: peserta.email,
+            posisi: peserta.posisi,
+            tanggalMulai: peserta.tanggalMulaiMagang,
+            tanggalSelesai: peserta.tanggalSelesaiMagang,
+          });
+
+          await sendEmail({
+            to: peserta.email,
+            subject: emailData.subject,
+            html: emailData.html,
+          });
+        }
+
+        // 👉 Kalau DITOLAK
+        if (status === "Ditolak") {
+          const emailData = ditolakMagangEmail({
+            name: peserta.nama,
+            email: peserta.email,
+            alasan: jawabanAdmin,
+          });
+
+          await sendEmail({
+            to: peserta.email,
+            subject: emailData.subject,
+            html: emailData.html,
+          });
+        }
+      } catch (mailError) {
+        console.error(`❌ Gagal kirim email ke ${peserta.email}`, mailError);
+      }
+    }
+
+    /* ================= RESPONSE ================= */
+
     return res.json({
-      message: "Status berhasil diperbarui",
+      message: "Status berhasil diperbarui & email terkirim",
       data: pendaftaran,
     });
   } catch (err: any) {
