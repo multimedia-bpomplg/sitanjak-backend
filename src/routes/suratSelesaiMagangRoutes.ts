@@ -10,24 +10,21 @@ import {
 
 const router = Router();
 
-// Upload surat selesai magang - hanya superadmin/admin
+router.get("/cek", authMiddleware, getSuratSelesaiMagangByEmail);
+
+router.get(
+  "/all",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getAllSuratSelesaiMagang,
+);
+
 router.post(
   "/",
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   uploadSuratSelesaiMagang.single("file"),
   uploadSuratSelesaiController,
-);
-
-// Get surat by email - untuk peserta
-router.get("/cek", authMiddleware, getSuratSelesaiMagangByEmail);
-
-// Get all surat - untuk superadmin
-router.get(
-  "/all",
-  authMiddleware,
-  roleMiddleware(["admin", "superadmin"]),
-  getAllSuratSelesaiMagang,
 );
 
 export default router;

@@ -30,10 +30,13 @@ export const getAnnouncementByType = async (req: Request, res: Response) => {
   try {
     const { type } = req.params;
 
-    const data = await Announcement.find({ type }).sort({ createdAt: -1 });
+    const data = await Announcement.find({
+      type,
+      isActive: true,
+    }).sort({ createdAt: -1 });
 
     res.json(data);
-  } catch {
+  } catch (err) {
     res.status(500).json({ message: "Gagal mengambil pengumuman" });
   }
 };

@@ -88,14 +88,10 @@ export const getSuratSelesaiMagangByEmail = async (
       });
     }
 
-    const surat = await SuratSelesaiMagang.findOne({
-      email,
-    });
+    const surat = await SuratSelesaiMagang.findOne({ email });
 
     if (!surat) {
-      return res.status(404).json({
-        message: "Surat selesai magang belum tersedia",
-      });
+      return res.status(200).json(null);
     }
 
     res.json(surat);
