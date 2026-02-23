@@ -21,7 +21,7 @@ export const uploadSuratSelesaiMagang = async (req: any, res: Response) => {
       email,
     });
 
-    if (existingSurat) {
+    if (existingSurat && existingSurat.file) {
       return res.status(400).json({
         message: "Surat selesai magang sudah pernah dikirimkan",
       });
