@@ -8,6 +8,7 @@ import {
 } from "../controllers/superadminController";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
+import { uploadSuratBalasan } from "../middlewares/upload.middleware";
 import {
   getMentor,
   nonaktifkanMentor,
@@ -287,6 +288,7 @@ router.put(
   "/pendaftaran/:id",
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
+  uploadSuratBalasan.single("suratBalasan"),
   updateStatus,
 );
 

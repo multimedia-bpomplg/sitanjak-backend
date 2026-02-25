@@ -79,7 +79,6 @@ export const login = async (req: Request, res: Response) => {
 
     await delay(1000);
 
-    // ✅ TAMBAHKAN isSuperAccess KE TOKEN
     const token = jwt.sign(
       {
         id: user._id,
@@ -87,7 +86,7 @@ export const login = async (req: Request, res: Response) => {
         email: user.email,
         roles: roleNames,
         status: user.status,
-        isSuperAccess: user.isSuperAccess || false, // ✅ INI YANG PENTING
+        isSuperAccess: user.isSuperAccess || false,
       },
       process.env.JWT_SECRET as string,
       { expiresIn: "1d" },
@@ -97,7 +96,7 @@ export const login = async (req: Request, res: Response) => {
       token,
       roles: roleNames,
       status: user.status,
-      isSuperAccess: user.isSuperAccess || false, // ✅ KIRIM JUGA DI RESPONSE
+      isSuperAccess: user.isSuperAccess || false,
     });
   } catch (error) {
     console.error(error);
