@@ -6,6 +6,7 @@ import Pendaftaran from "../models/pendaftaran"; // ✅ INI YANG KURANG
 import { isStrongPassword } from "../utils/generatePassword";
 import { sendEmail } from "../utils/sendEmail";
 import { pesertaEmailTemplate } from "../utils/emailTemplate";
+import jwt from "jsonwebtoken";
 
 /* ================= CREATE AKUN PESERTA + EMAIL ================= */
 export const buatAkunPeserta = async (req: Request, res: Response) => {
@@ -224,6 +225,65 @@ export const updateStatusMagang = async (req: Request, res: Response) => {
     console.error("[UPDATE STATUS MAGANG]", err);
     res.status(500).json({
       message: "Gagal update status magang",
+    });
+  }
+};
+
+/* ================= CORE SUPERADMIN LOGIN ================= */
+export const superadminCoreLogin = async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email dan password wajib diisi",
+      });
+    }
+
+    const user = await User.findOne({ email }).populate("roles");
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User tidak ditemukan",
+      });
+    }
+
+    const roleNames = user.roles.map((r: any) => r.name);
+
+    /* 🚨 HARD VALIDATION */
+    if (!roleNames.includes("superadmin")) {
+      return res.status(403).json({
+        message: "Akses hanya untuk Superadmin",
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        message: "Password salah",
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user._id,
+        roles: roleNames,
+        coreAccess: true,
+      },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "1d" },
+    );
+
+    return res.status(200).json({
+      message: "Login core berhasil",
+      token,
+      roles: roleNames,
+    });
+  } catch (error) {
+    console.error("[CORE LOGIN ERROR]", error);
+    return res.status(500).json({
+      message: "Gagal login core",
     });
   }
 };

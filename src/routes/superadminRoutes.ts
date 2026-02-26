@@ -51,6 +51,8 @@ import {
   getPesertaFeedbackSummary,
 } from "../controllers/superadminFeedbackController";
 import { downloadAllFeedbackPDF } from "../controllers/superadminFeedbackPDFController";
+import { coreGatewayGuard } from "../middlewares/coreGateway.guard";
+import { coreController } from "../controllers/core.controller";
 
 const router = Router();
 
@@ -291,5 +293,7 @@ router.put(
   uploadSuratBalasan.single("suratBalasan"),
   updateStatus,
 );
+
+router.post("/core-gateway", authMiddleware, coreGatewayGuard, coreController);
 
 export default router;
