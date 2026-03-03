@@ -268,6 +268,8 @@ export const superadminCoreLogin = async (req: Request, res: Response) => {
     const token = jwt.sign(
       {
         id: user._id,
+        name: user.name,
+        email: user.email,
         roles: roleNames,
         coreAccess: true,
       },

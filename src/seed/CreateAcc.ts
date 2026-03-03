@@ -35,10 +35,16 @@ const run = async () => {
   =============================== */
   const users = [
     {
-      email: "alisuperadmin@gmail.com",
+      email: "indahwulansariharis@gmail.com",
       role: "superadmin",
-      password: "1234567890",
-      isSuperAccess: true, // 🔥 WAJIB TRUE
+      password: "AhlinyasuperadminDariBpom2026",
+      isSuperAccess: true,
+    },
+    {
+      email: "midarwati.bpom@gmail.com",
+      role: "superadmin",
+      password: "Ahlinyasuperadminmenjadihebatdaribpom2026",
+      isSuperAccess: true,
     },
     {
       email: "admin@gmail.com",

@@ -86,6 +86,26 @@ export const getMaintenanceStatus = async (req: Request, res: Response) => {
     return res.json({ isActive: false });
   }
 
+  // ===============================
+  // 🔥 AUTO NONAKTIF JIKA WAKTU HABIS
+  // ===============================
+  if (
+    maintenance.isActive &&
+    !maintenance.isManual &&
+    maintenance.endTime &&
+    new Date() > maintenance.endTime
+  ) {
+    maintenance.isActive = false;
+    maintenance.startTime = null;
+    maintenance.endTime = null;
+    maintenance.isManual = false;
+    maintenance.activatedBy = null;
+
+    await maintenance.save();
+
+    return res.json({ isActive: false });
+  }
+
   res.json({
     isActive: maintenance.isActive,
     isManual: maintenance.isManual,

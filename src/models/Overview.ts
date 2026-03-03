@@ -47,7 +47,7 @@ const OverviewStatsSchema = new Schema(
     totalLogbook: { type: Number, default: 0 },
 
     // Time series
-    date: { type: Date, required: true, index: true },
+    date: { type: Date, required: true },
     logbook: { type: Number, default: 0 },
     pendaftaran: { type: Number, default: 0 },
     peserta_aktif: { type: Number, default: 0 },
