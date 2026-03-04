@@ -26,33 +26,52 @@ export const getFormasi = async (req: Request, res: Response) => {
     const formasi = await Formasi.find();
 
     const statistik = await Pendaftaran.aggregate([
-      // 1️⃣ Hanya pendaftaran disetujui
       {
         $match: {
           status: "Disetujui",
         },
       },
 
-      // 2️⃣ Pecah array peserta
       {
         $unwind: "$peserta",
       },
 
-      // 3️⃣ Hanya yang SEDANG MAGANG (mengurangi kuota)
       {
         $match: {
-          "peserta.statusMagang": {
-            $in: ["Belum Waktu Magang", "Sedang Magang"],
-          },
           "peserta.posisi": { $ne: "" },
         },
       },
 
-      // 4️⃣ Group berdasarkan posisi
       {
         $group: {
           _id: "$peserta.posisi",
-          total: { $sum: 1 },
+
+          // yang masih memakai kuota
+          aktif: {
+            $sum: {
+              $cond: [
+                {
+                  $in: [
+                    "$peserta.statusMagang",
+                    ["Belum Waktu Magang", "Sedang Magang"],
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+
+          // yang sudah selesai magang
+          selesai: {
+            $sum: {
+              $cond: [
+                { $eq: ["$peserta.statusMagang", "Selesai Magang"] },
+                1,
+                0,
+              ],
+            },
+          },
         },
       },
     ]);
@@ -63,7 +82,8 @@ export const getFormasi = async (req: Request, res: Response) => {
     const result = formasi.map((item) => {
       const found = statistik.find((s) => s._id === item.title);
 
-      const jumlahPendaftar = found ? found.total : 0;
+      const jumlahPendaftar = found ? found.aktif : 0;
+      const jumlahSelesaiMagang = found ? found.selesai : 0;
       const sisaKuota = item.kuota - jumlahPendaftar;
 
       return {
@@ -75,6 +95,7 @@ export const getFormasi = async (req: Request, res: Response) => {
         kode: item.title.toUpperCase().replace(/\s/g, "-"),
 
         jumlahPendaftar,
+        jumlahSelesaiMagang,
         sisaKuota: sisaKuota < 0 ? 0 : sisaKuota,
       };
     });
@@ -143,5 +164,45 @@ export const getPrediksiFormasi = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Gagal ambil prediksi" });
+  }
+};
+
+export const getSelesaiMagang = async (req: Request, res: Response) => {
+  try {
+    const data = await Pendaftaran.aggregate([
+      {
+        $match: {
+          status: "Disetujui",
+        },
+      },
+
+      {
+        $unwind: "$peserta",
+      },
+
+      {
+        $match: {
+          "peserta.statusMagang": "Selesai Magang",
+        },
+      },
+
+      {
+        $group: {
+          _id: null,
+          totalSelesaiMagang: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const total = data.length > 0 ? data[0].totalSelesaiMagang : 0;
+
+    res.json({
+      totalSelesaiMagang: total,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Gagal mengambil data selesai magang",
+    });
   }
 };
