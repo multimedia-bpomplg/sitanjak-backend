@@ -41,6 +41,12 @@ Thumbs.db
 .vscode/
 .idea/
 
+
+dump/
+backups/
+*.bson
+*.metadata.json
+
 # ===============================
 # TypeScript
 # ===============================
