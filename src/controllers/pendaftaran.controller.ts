@@ -296,43 +296,43 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
 
     /* ================= KIRIM EMAIL ================= */
 
-    for (const peserta of pendaftaran.peserta) {
-      try {
-        // 👉 Kalau DISETUJUI
-        if (status === "Disetujui") {
-          const emailData = diterimaMagangEmail({
-            name: peserta.nama,
-            email: peserta.email,
-            posisi: peserta.posisi,
-            tanggalMulai: peserta.tanggalMulaiMagang,
-            tanggalSelesai: peserta.tanggalSelesaiMagang,
-          });
+    Promise.all(
+      pendaftaran.peserta.map(async (peserta) => {
+        try {
+          if (status === "Disetujui") {
+            const emailData = diterimaMagangEmail({
+              name: peserta.nama,
+              email: peserta.email,
+              posisi: peserta.posisi,
+              tanggalMulai: peserta.tanggalMulaiMagang,
+              tanggalSelesai: peserta.tanggalSelesaiMagang,
+            });
 
-          await sendEmail({
-            to: peserta.email,
-            subject: emailData.subject,
-            html: emailData.html,
-          });
+            await sendEmail({
+              to: peserta.email,
+              subject: emailData.subject,
+              html: emailData.html,
+            });
+          }
+
+          if (status === "Ditolak") {
+            const emailData = ditolakMagangEmail({
+              name: peserta.nama,
+              email: peserta.email,
+              alasan: jawabanAdmin,
+            });
+
+            await sendEmail({
+              to: peserta.email,
+              subject: emailData.subject,
+              html: emailData.html,
+            });
+          }
+        } catch (mailError) {
+          console.error(`❌ Gagal kirim email ke ${peserta.email}`, mailError);
         }
-
-        // 👉 Kalau DITOLAK
-        if (status === "Ditolak") {
-          const emailData = ditolakMagangEmail({
-            name: peserta.nama,
-            email: peserta.email,
-            alasan: jawabanAdmin,
-          });
-
-          await sendEmail({
-            to: peserta.email,
-            subject: emailData.subject,
-            html: emailData.html,
-          });
-        }
-      } catch (mailError) {
-        console.error(`❌ Gagal kirim email ke ${peserta.email}`, mailError);
-      }
-    }
+      }),
+    );
 
     /* ================= RESPONSE ================= */
 
