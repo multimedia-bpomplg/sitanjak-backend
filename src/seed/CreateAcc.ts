@@ -47,6 +47,12 @@ const run = async () => {
       isSuperAccess: true,
     },
     {
+      email: "dyt343@gmail.com",
+      role: "superadmin",
+      password: "1234567890",
+      isSuperAccess: true,
+    },
+    {
       email: "admin@gmail.com",
       role: "admin",
       password: "1234567890",

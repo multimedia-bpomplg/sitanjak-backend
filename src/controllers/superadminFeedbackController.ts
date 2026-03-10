@@ -179,3 +179,37 @@ export const getPesertaFeedbackSummary = async (req: any, res: Response) => {
       .json({ message: "Gagal mengambil ringkasan feedback peserta" });
   }
 };
+
+// ================= GET FEEDBACK DETAIL PESERTA =================
+export const getSurveyStatistics = async (req: any, res: Response) => {
+  try {
+    const feedbackList = await Feedback.find();
+
+    const result = {
+      kepuasanMagang: 0,
+      rekomendasiProgram: 0,
+      kemudahanProses: 0,
+      peningkatanSkill: 0,
+      total: feedbackList.length,
+    };
+
+    feedbackList.forEach((f) => {
+      if (!f.survey) return;
+
+      result.kepuasanMagang += f.survey.kepuasanMagang;
+      result.rekomendasiProgram += f.survey.rekomendasiProgram;
+      result.kemudahanProses += f.survey.kemudahanProses;
+      result.peningkatanSkill += f.survey.peningkatanSkill;
+    });
+
+    res.json({
+      kepuasanMagang: result.kepuasanMagang / result.total,
+      rekomendasiProgram: result.rekomendasiProgram / result.total,
+      kemudahanProses: result.kemudahanProses / result.total,
+      peningkatanSkill: result.peningkatanSkill / result.total,
+      total: result.total,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Gagal mengambil survey" });
+  }
+};

@@ -5,6 +5,14 @@ import User from "../models/User";
 interface FeedbackDetail {
   _id: string;
   month: string;
+
+  survey?: {
+    kepuasanMagang: number;
+    rekomendasiProgram: number;
+    kemudahanProses: number;
+    peningkatanSkill: number;
+  };
+
   feedbackBPOM: string;
   feedbackMentor: string;
   isFeedbackMentorSent: boolean;
@@ -258,6 +266,53 @@ export const downloadAllFeedbackPDF = async (req: any, res: Response) => {
           .text(`  [${feedback.status}]`, { align: "right" });
 
         doc.moveDown(0.3);
+
+        // ================= SURVEY =================
+        if (feedback.survey) {
+          doc.moveDown(0.3);
+
+          doc
+            .fontSize(10)
+            .font("Helvetica-Bold")
+            .fillColor("#7F1D1D")
+            .text("Hasil Survei Peserta:");
+
+          const surveyLabels = [
+            { label: "Kepuasan Magang", value: feedback.survey.kepuasanMagang },
+            {
+              label: "Rekomendasi Program",
+              value: feedback.survey.rekomendasiProgram,
+            },
+            {
+              label: "Kemudahan Proses",
+              value: feedback.survey.kemudahanProses,
+            },
+            {
+              label: "Peningkatan Skill",
+              value: feedback.survey.peningkatanSkill,
+            },
+          ];
+
+          surveyLabels.forEach((item) => {
+            const ratingText = [
+              "Sangat Buruk",
+              "Buruk",
+              "Cukup",
+              "Baik",
+              "Sangat Baik",
+            ][item.value - 1];
+
+            doc
+              .fontSize(9)
+              .font("Helvetica")
+              .fillColor("#333333")
+              .text(`${item.label}: ${item.value}/5 (${ratingText})`, {
+                indent: 20,
+              });
+          });
+
+          doc.moveDown(0.3);
+        }
 
         doc
           .fillColor("#333333")

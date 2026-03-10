@@ -58,6 +58,33 @@ const FeedbackSchema = new mongoose.Schema(
       enum: ["Dikirim", "Dibaca", "Direspon"],
       default: "Dikirim",
     },
+    /* ===== SURVEY PENILAIAN (1-5) ===== */
+    survey: {
+      kepuasanMagang: {
+        type: Number,
+        min: 1,
+        max: 5,
+        required: true,
+      },
+      rekomendasiProgram: {
+        type: Number,
+        min: 1,
+        max: 5,
+        required: true,
+      },
+      kemudahanProses: {
+        type: Number,
+        min: 1,
+        max: 5,
+        required: true,
+      },
+      peningkatanSkill: {
+        type: Number,
+        min: 1,
+        max: 5,
+        required: true,
+      },
+    },
   },
   { timestamps: true },
 );

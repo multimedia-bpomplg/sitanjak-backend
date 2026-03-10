@@ -9,6 +9,41 @@ export const createFeedback = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
 
+    // ================= VALIDASI SURVEY =================
+    const {
+      kepuasanMagang,
+      rekomendasiProgram,
+      kemudahanProses,
+      peningkatanSkill,
+    } = req.body;
+
+    if (
+      !kepuasanMagang ||
+      !rekomendasiProgram ||
+      !kemudahanProses ||
+      !peningkatanSkill
+    ) {
+      return res.status(400).json({
+        message: "Semua penilaian survei wajib diisi",
+      });
+    }
+
+    // ================= VALIDASI NILAI 1-5 =================
+    const scores = [
+      kepuasanMagang,
+      rekomendasiProgram,
+      kemudahanProses,
+      peningkatanSkill,
+    ];
+
+    for (const score of scores) {
+      if (score < 1 || score > 5) {
+        return res.status(400).json({
+          message: "Nilai survei harus antara 1 sampai 5",
+        });
+      }
+    }
+
     // Cek apakah sudah mengirim feedback bulan ini
     const exists = await Feedback.findOne({
       user: userId,
@@ -24,9 +59,18 @@ export const createFeedback = async (req: any, res: Response) => {
     const feedback = await Feedback.create({
       user: userId,
       month: req.body.month,
+
+      survey: {
+        kepuasanMagang: req.body.kepuasanMagang,
+        rekomendasiProgram: req.body.rekomendasiProgram,
+        kemudahanProses: req.body.kemudahanProses,
+        peningkatanSkill: req.body.peningkatanSkill,
+      },
+
       feedbackBPOM: req.body.feedbackBPOM,
       feedbackMentor: req.body.feedbackMentor,
-      isFeedbackMentorSent: true, // Langsung true karena feedback mentor langsung terkirim
+
+      isFeedbackMentorSent: true,
       feedbackMentorSentAt: new Date(),
       status: "Dikirim",
     });
@@ -111,7 +155,7 @@ export const getRiwayatFeedback = async (req: any, res: Response) => {
     const feedback = await Feedback.find({ user: userId })
       .sort({ month: -1 })
       .select(
-        "month feedbackBPOM feedbackMentor isFeedbackMentorSent status createdAt mentorResponse mentorRespondedAt",
+        "month feedbackBPOM feedbackMentor survey isFeedbackMentorSent status createdAt mentorResponse mentorRespondedAt",
       );
 
     res.json(feedback);
@@ -160,6 +204,9 @@ export const getFeedbackForMentor = async (req: any, res: Response) => {
     const sanitizedFeedback = feedbackList.map((fb) => ({
       _id: fb._id,
       month: fb.month,
+
+      survey: fb.survey, // 🔥 TAMBAHKAN INI
+
       feedbackMentor: fb.feedbackMentor,
       status: fb.status,
       mentorResponse: fb.mentorResponse || "",
