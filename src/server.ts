@@ -8,6 +8,7 @@ import router from "./routes";
 import overviewRoutes from "./routes/overview.routes";
 import { connectDB } from "./config/database";
 import { maintenanceMiddleware } from "./middlewares/maintenance.middleware";
+import { startWhatsapp } from "./utils/whatsappClient";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,17 +51,26 @@ app.get("/api/health", (req, res) => {
     START SERVER
 ======================= */
 app.listen(PORT, async () => {
-  await connectDB();
+  try {
+    await connectDB();
 
-  console.log("========================================");
-  console.log("🚀 BPOM Internship API Server");
-  console.log("Status     : RUNNING");
-  console.log("Database   : MongoDB Connected");
-  console.log(
-    `Mode       : ${
-      process.env.NODE_ENV === "production" ? "PRODUCTION" : "DEVELOPMENT"
-    }`,
-  );
-  console.log(`Port       : ${PORT}`);
-  console.log(`Started At : ${new Date().toLocaleTimeString()}`);
+    /* START WHATSAPP GATEWAY */
+    await startWhatsapp();
+
+    console.log("========================================");
+    console.log("🚀 BPOM Internship API Server");
+    console.log("Status     : RUNNING");
+    console.log("Database   : MongoDB Connected");
+    console.log("WhatsApp   : INITIALIZING");
+    console.log(
+      `Mode       : ${
+        process.env.NODE_ENV === "production" ? "PRODUCTION" : "DEVELOPMENT"
+      }`,
+    );
+    console.log(`Port       : ${PORT}`);
+    console.log(`Started At : ${new Date().toLocaleTimeString()}`);
+    console.log("========================================");
+  } catch (error) {
+    console.error("❌ Server gagal start:", error);
+  }
 });

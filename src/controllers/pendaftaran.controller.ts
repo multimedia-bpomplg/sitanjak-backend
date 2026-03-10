@@ -7,6 +7,9 @@ import {
   diterimaMagangEmail,
   ditolakMagangEmail,
 } from "../utils/statusMagangEmail";
+import Whatsapp from "../models/Whatsapp";
+import { sendWhatsapp } from "../utils/sendWhatsapp";
+import { sendWhatsappGroup } from "../utils/whatsappClient";
 
 /* ================= TYPE UNTUK MULTER ================= */
 interface MulterRequest extends Request {
@@ -130,6 +133,55 @@ export const createPendaftaran = async (req: Request, res: Response) => {
       suratPengantar: `surat-pengantar/${req.file.filename}`,
     });
 
+    /* ================= KIRIM NOTIFIKASI WHATSAPP ================= */
+
+    setImmediate(async () => {
+      try {
+        const whatsapp = await Whatsapp.findOne({ isActive: true });
+
+        if (!whatsapp) {
+          console.log("❌ Tidak ada nomor WhatsApp aktif");
+          return;
+        }
+
+        const pesertaPertama = pesertaFix[0];
+
+        const pesan = `
+📢 *PENDAFTARAN MAGANG BARU*
+
+👤 Nama : ${pesertaPertama.nama}
+📧 Email : ${pesertaPertama.email}
+📱 WA : ${pesertaPertama.wa}
+
+💼 Posisi : ${pesertaPertama.posisi}
+👥 Jumlah Peserta : ${jumlahFix}
+📂 Kategori : ${kategori}
+
+🕒 ${new Date().toLocaleString("id-ID")}
+
+Dashboard:
+https://sitanjak.tech/
+`;
+
+        // ================================
+        // KIRIM KE GROUP YANG DIPILIH
+        // ================================
+        if (whatsapp?.groupId) {
+          await sendWhatsappGroup(whatsapp.groupId, pesan);
+
+          console.log(
+            "✅ Notifikasi terkirim ke grup:",
+            whatsapp.groupName || whatsapp.groupId,
+          );
+        } else {
+          console.log("⚠️ Belum ada grup WhatsApp yang dipilih di dashboard");
+        }
+      } catch (error) {
+        console.error("❌ Error kirim WhatsApp:", error);
+      }
+    });
+
+    /* ===== RESPONSE KE USER ===== */
     return res.status(201).json({
       message: "Pendaftaran berhasil",
       data,

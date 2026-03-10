@@ -1,36 +1,45 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import Whatsapp from "../models/Whatsapp";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import mongoose from "mongoose";
+import {
+  getQR,
+  getStatus,
+  startWhatsapp,
+  getWhatsappGroups,
+  resetWhatsappSession,
+} from "../utils/whatsappClient";
 
 export class WhatsappController {
   /**
-   * Get active WhatsApp number
+   * =====================================
+   * Get Active WhatsApp Number
+   * =====================================
    */
   async getActiveWhatsapp(req: Request, res: Response) {
     try {
       const whatsapp = await Whatsapp.findOne({ isActive: true })
-        .select("phoneNumber updatedAt")
+        .select("phoneNumber updatedAt groupId groupName")
         .populate("updatedBy", "name email");
 
       return res.status(200).json({
         success: true,
-        data: whatsapp || {
-          phoneNumber: "6288274133623",
-          isDefault: true,
-        },
+        data: whatsapp || null,
       });
     } catch (error) {
+      console.error("❌ ERROR getActiveWhatsapp:", error);
+
       return res.status(500).json({
         success: false,
         message: "Gagal mengambil nomor WhatsApp",
-        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   }
 
   /**
-   * Get all WhatsApp numbers
+   * =====================================
+   * Get All WhatsApp Numbers
+   * =====================================
    */
   async getAllWhatsapp(req: AuthRequest, res: Response) {
     try {
@@ -43,16 +52,19 @@ export class WhatsappController {
         data: whatsapps,
       });
     } catch (error) {
+      console.error("❌ ERROR getAllWhatsapp:", error);
+
       return res.status(500).json({
         success: false,
         message: "Gagal mengambil data WhatsApp",
-        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   }
 
   /**
-   * Create or update WhatsApp number
+   * =====================================
+   * Update WhatsApp Number
+   * =====================================
    */
   async updateWhatsapp(req: AuthRequest, res: Response) {
     try {
@@ -74,14 +86,14 @@ export class WhatsappController {
       }
 
       const phoneRegex = /^08\d{8,11}$/;
+
       if (!phoneRegex.test(phoneNumber)) {
         return res.status(400).json({
           success: false,
-          message: "Format nomor harus diawali 08 dan minimal 10 digit",
+          message: "Format nomor harus diawali 08",
         });
       }
 
-      // Convert 08 → 62
       const internationalNumber = "62" + phoneNumber.substring(1);
 
       let whatsapp = await Whatsapp.findOne({
@@ -89,12 +101,14 @@ export class WhatsappController {
       });
 
       if (whatsapp) {
-        // Jika sudah ada → aktifkan kembali
         whatsapp.isActive = true;
         whatsapp.updatedBy = userId;
+
         await whatsapp.save();
+
+        // RESET SESSION
+        await resetWhatsappSession();
       } else {
-        // Jika belum ada → buat baru
         whatsapp = new Whatsapp({
           phoneNumber: internationalNumber,
           isActive: true,
@@ -102,6 +116,9 @@ export class WhatsappController {
         });
 
         await whatsapp.save();
+
+        // RESET SESSION
+        await resetWhatsappSession();
       }
 
       const populatedWhatsapp = await Whatsapp.findById(whatsapp._id).populate(
@@ -112,11 +129,7 @@ export class WhatsappController {
       return res.status(200).json({
         success: true,
         message: "Nomor WhatsApp berhasil diperbarui",
-        data: {
-          phoneNumber: populatedWhatsapp?.phoneNumber,
-          updatedAt: populatedWhatsapp?.updatedAt,
-          updatedBy: populatedWhatsapp?.updatedBy,
-        },
+        data: populatedWhatsapp,
       });
     } catch (error) {
       console.error("❌ ERROR updateWhatsapp:", error);
@@ -124,13 +137,14 @@ export class WhatsappController {
       return res.status(500).json({
         success: false,
         message: "Gagal memperbarui nomor WhatsApp",
-        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   }
 
   /**
-   * Delete WhatsApp number
+   * =====================================
+   * Delete WhatsApp Number
+   * =====================================
    */
   async deleteWhatsapp(req: AuthRequest, res: Response) {
     try {
@@ -152,7 +166,6 @@ export class WhatsappController {
         });
       }
 
-      // Jika yang dihapus adalah nomor aktif
       if (whatsapp.isActive) {
         const anotherWhatsapp = await Whatsapp.findOne({
           _id: { $ne: id },
@@ -166,15 +179,139 @@ export class WhatsappController {
 
       await whatsapp.deleteOne();
 
+      // reset session setelah nomor dihapus
+      await resetWhatsappSession();
+
       return res.status(200).json({
         success: true,
         message: "Nomor WhatsApp berhasil dihapus",
       });
     } catch (error) {
+      console.error("❌ ERROR deleteWhatsapp:", error);
+
       return res.status(500).json({
         success: false,
         message: "Gagal menghapus nomor WhatsApp",
-        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  /**
+   * =====================================
+   * Get WhatsApp QR
+   * =====================================
+   */
+  async getWhatsappQR(req: AuthRequest, res: Response) {
+    try {
+      const qr = getQR();
+      const status = getStatus();
+
+      return res.status(200).json({
+        success: true,
+        qr,
+        status,
+      });
+    } catch (error) {
+      console.error("❌ ERROR getWhatsappQR:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Gagal mengambil QR WhatsApp",
+      });
+    }
+  }
+
+  /**
+   * =====================================
+   * Reconnect WhatsApp
+   * =====================================
+   */
+  async reconnectWhatsapp(req: AuthRequest, res: Response) {
+    try {
+      await startWhatsapp();
+
+      return res.status(200).json({
+        success: true,
+        message: "Reconnect WhatsApp berhasil",
+      });
+    } catch (error) {
+      console.error("❌ ERROR reconnectWhatsapp:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Gagal reconnect WhatsApp",
+      });
+    }
+  }
+
+  /**
+   * =====================================
+   * Get WhatsApp Groups
+   * =====================================
+   */
+  async getWhatsappGroups(req: AuthRequest, res: Response) {
+    try {
+      const groups = await getWhatsappGroups();
+
+      return res.status(200).json({
+        success: true,
+        data: groups,
+      });
+    } catch (error) {
+      console.error("❌ ERROR getWhatsappGroups:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Gagal mengambil daftar group WhatsApp",
+      });
+    }
+  }
+
+  /**
+   * =====================================
+   * Set WhatsApp Group
+   * =====================================
+   */
+  async setWhatsappGroup(req: AuthRequest, res: Response) {
+    try {
+      const { groupId, groupName } = req.body;
+
+      if (!groupId || !groupName) {
+        return res.status(400).json({
+          success: false,
+          message: "Group ID dan Group Name wajib diisi",
+        });
+      }
+
+      const whatsapp = await Whatsapp.findOne({ isActive: true });
+
+      if (!whatsapp) {
+        return res.status(404).json({
+          success: false,
+          message: "Nomor WhatsApp aktif tidak ditemukan",
+        });
+      }
+
+      // Update field grup di database
+      whatsapp.groupId = groupId;
+      whatsapp.groupName = groupName;
+
+      await whatsapp.save();
+
+      return res.json({
+        success: true,
+        message: "Grup WhatsApp berhasil disimpan",
+        data: {
+          groupId: whatsapp.groupId,
+          groupName: whatsapp.groupName,
+        },
+      });
+    } catch (error) {
+      console.error("❌ ERROR setWhatsappGroup:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Gagal menyimpan grup WhatsApp",
       });
     }
   }

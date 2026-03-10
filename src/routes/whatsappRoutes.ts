@@ -11,7 +11,10 @@ router.get("/active", (req, res) =>
   whatsappController.getActiveWhatsapp(req, res),
 );
 
-// Protected routes - butuh auth dan role superadmin/admin
+// =============================
+// Protected routes
+// =============================
+
 router.put(
   "/update",
   authMiddleware,
@@ -31,6 +34,40 @@ router.delete(
   authMiddleware,
   roleMiddleware(["superadmin", "admin"]),
   (req, res) => whatsappController.deleteWhatsapp(req, res),
+);
+
+// =============================
+// WhatsApp Gateway
+// =============================
+
+// Ambil QR Code
+router.get(
+  "/qr",
+  authMiddleware,
+  roleMiddleware(["superadmin", "admin"]),
+  (req, res) => whatsappController.getWhatsappQR(req, res),
+);
+
+// Reconnect WhatsApp
+router.post(
+  "/reconnect",
+  authMiddleware,
+  roleMiddleware(["superadmin", "admin"]),
+  (req, res) => whatsappController.reconnectWhatsapp(req, res),
+);
+
+router.get(
+  "/groups",
+  authMiddleware,
+  roleMiddleware(["superadmin", "admin"]),
+  (req, res) => whatsappController.getWhatsappGroups(req, res),
+);
+
+router.post(
+  "/set-group",
+  authMiddleware,
+  roleMiddleware(["superadmin", "admin"]),
+  (req, res) => whatsappController.setWhatsappGroup(req, res),
 );
 
 export default router;

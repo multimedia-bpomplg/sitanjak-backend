@@ -2,10 +2,10 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface IWhatsapp extends Document {
   phoneNumber: string;
+  groupId?: string;
+  groupName?: string;
   isActive: boolean;
   updatedBy: mongoose.Types.ObjectId;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 const WhatsappSchema = new Schema<IWhatsapp>(
@@ -21,6 +21,15 @@ const WhatsappSchema = new Schema<IWhatsapp>(
         message: (props: any) =>
           `${props.value} bukan format nomor yang valid! Harus diawali 62`,
       },
+    },
+    groupId: {
+      type: String,
+      default: null,
+    },
+
+    groupName: {
+      type: String,
+      default: null,
     },
     isActive: {
       type: Boolean,
