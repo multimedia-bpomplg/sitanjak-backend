@@ -20,33 +20,30 @@ export const getFormasi = async (req: Request, res: Response) => {
         title: item,
         kuota: 5,
       }));
-
       await Formasi.insertMany(data);
     }
+
     const formasi = await Formasi.find();
 
+    // Ambil data statistik pendaftar aktif dan selesai
     const statistik = await Pendaftaran.aggregate([
       {
         $match: {
           status: "Disetujui",
         },
       },
-
       {
         $unwind: "$peserta",
       },
-
       {
         $match: {
           "peserta.posisi": { $ne: "" },
         },
       },
-
       {
         $group: {
           _id: "$peserta.posisi",
 
-          // yang masih memakai kuota
           aktif: {
             $sum: {
               $cond: [
@@ -62,7 +59,6 @@ export const getFormasi = async (req: Request, res: Response) => {
             },
           },
 
-          // yang sudah selesai magang
           selesai: {
             $sum: {
               $cond: [
@@ -72,19 +68,79 @@ export const getFormasi = async (req: Request, res: Response) => {
               ],
             },
           },
+
+          // 🔥 TAMBAHAN
+          statusMagangList: {
+            $push: "$peserta.statusMagang",
+          },
+
+          tanggalMulaiMagangList: {
+            $push: "$peserta.tanggalMulaiMagang",
+          },
+
+          tanggalSelesaiMagangList: {
+            $push: "$peserta.tanggalSelesaiMagang",
+          },
         },
       },
     ]);
 
-    // ===============================
-    // 4. GABUNG DATA
-    // ===============================
+    // ✅ AMBIL DATA LENGKAP PESERTA UNTUK SETIAP FORMASI
+    // Ini untuk mendapatkan tanggal mulai dan selesai magang
+    const semuaPendaftaran = await Pendaftaran.find({
+      status: "Disetujui",
+    }).populate("peserta.mentor", "name email");
+
+    // Buat map untuk menyimpan data peserta per formasi
+    const pesertaPerFormasi: Record<string, any[]> = {};
+
+    semuaPendaftaran.forEach((pendaftaran) => {
+      pendaftaran.peserta.forEach((p: any) => {
+        const posisi = p.posisi;
+        if (!posisi) return;
+
+        if (!pesertaPerFormasi[posisi]) {
+          pesertaPerFormasi[posisi] = [];
+        }
+
+        // Simpan data peserta dengan tanggal magang
+        pesertaPerFormasi[posisi].push({
+          nama: p.nama,
+          email: p.email,
+          tanggalMulai: p.tanggalMulaiMagang,
+          tanggalSelesai: p.tanggalSelesaiMagang,
+          statusMagang: p.statusMagang || "Menunggu",
+        });
+      });
+    });
+
+    // Gabungkan data
     const result = formasi.map((item) => {
       const found = statistik.find((s) => s._id === item.title);
 
       const jumlahPendaftar = found ? found.aktif : 0;
       const jumlahSelesaiMagang = found ? found.selesai : 0;
       const sisaKuota = item.kuota - jumlahPendaftar;
+
+      // Ambil data peserta untuk formasi ini
+      const daftarPeserta = pesertaPerFormasi[item.title] || [];
+
+      // Cari tanggal mulai dan selesai terbaru (untuk keperluan internal)
+      let tanggalMulaiTerbaru = "";
+      let tanggalSelesaiTerbaru = "";
+
+      if (daftarPeserta.length > 0) {
+        // Urutkan berdasarkan tanggal mulai (descending) untuk mendapatkan yang terbaru
+        const sorted = [...daftarPeserta].sort((a, b) => {
+          return (
+            new Date(b.tanggalMulai).getTime() -
+            new Date(a.tanggalMulai).getTime()
+          );
+        });
+
+        tanggalMulaiTerbaru = sorted[0]?.tanggalMulai || "";
+        tanggalSelesaiTerbaru = sorted[0]?.tanggalSelesai || "";
+      }
 
       return {
         _id: item._id,
@@ -97,19 +153,24 @@ export const getFormasi = async (req: Request, res: Response) => {
         jumlahPendaftar,
         jumlahSelesaiMagang,
         sisaKuota: sisaKuota < 0 ? 0 : sisaKuota,
+
+        // 🔥 DATA TAMBAHAN (tidak perlu ditampilkan)
+        statusMagang: found?.statusMagangList || [],
+        tanggalMulaiMagang: found?.tanggalMulaiMagangList || [],
+        tanggalSelesaiMagang: found?.tanggalSelesaiMagangList || [],
       };
     });
 
     res.json(result);
   } catch (error) {
     console.error(error);
-
     res.status(500).json({
       message: "Gagal mengambil data formasi",
     });
   }
 };
 
+// Controller lainnya tetap sama...
 export const getPrediksiFormasi = async (req: Request, res: Response) => {
   try {
     const data = await Pendaftaran.find({
@@ -175,17 +236,14 @@ export const getSelesaiMagang = async (req: Request, res: Response) => {
           status: "Disetujui",
         },
       },
-
       {
         $unwind: "$peserta",
       },
-
       {
         $match: {
           "peserta.statusMagang": "Selesai Magang",
         },
       },
-
       {
         $group: {
           _id: null,
