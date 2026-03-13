@@ -88,19 +88,46 @@ export const buatAkunPeserta = async (req: Request, res: Response) => {
 export const getPeserta = async (req: Request, res: Response) => {
   try {
     const rolePeserta = await Role.findOne({ name: "peserta" });
+
     if (!rolePeserta) {
       return res.status(500).json({
         message: "Role peserta belum tersedia",
       });
     }
 
-    const peserta = await User.find({
+    /* ================= USER PESERTA ================= */
+
+    const users = await User.find({
       roles: rolePeserta._id,
     })
       .select("name email status periode createdAt")
       .sort({ createdAt: -1 });
 
-    res.status(200).json(peserta);
+    /* ================= PENDAFTARAN ================= */
+
+    const pendaftaran = await Pendaftaran.find();
+
+    /* ================= GABUNGKAN DATA ================= */
+
+    const result = users.map((user) => {
+      let statusMagang = "Menunggu";
+
+      for (const daftar of pendaftaran) {
+        const peserta = daftar.peserta.find((p: any) => p.email === user.email);
+
+        if (peserta) {
+          statusMagang = peserta.statusMagang || "Menunggu";
+          break;
+        }
+      }
+
+      return {
+        ...user.toObject(),
+        statusMagang,
+      };
+    });
+
+    res.status(200).json(result);
   } catch (error) {
     console.error("[GET PESERTA]", error);
     res.status(500).json({

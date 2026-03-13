@@ -57,7 +57,7 @@ export const createPendaftaran = async (req: Request, res: Response) => {
         !p.posisi ||
         !p.asalJenis ||
         !p.asalNama ||
-        !p.jurusan || // ⬅️ TAMBAHAN
+        (p.asalJenis !== "Instansi" && !p.jurusan) ||
         !p.tanggalMulaiMagang ||
         !p.tanggalSelesaiMagang ||
         !p.tempatLahir ||

@@ -9,6 +9,7 @@ import overviewRoutes from "./routes/overview.routes";
 import { connectDB } from "./config/database";
 import { maintenanceMiddleware } from "./middlewares/maintenance.middleware";
 import { startWhatsapp } from "./utils/whatsappClient";
+import { autoNonaktifPeserta } from "./jobs/autoNonaktifPeserta";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -54,8 +55,11 @@ app.listen(PORT, async () => {
   try {
     await connectDB();
 
-    /* START WHATSAPP GATEWAY */
+    /* START WHATSAPP */
     await startWhatsapp();
+
+    /* START CRON JOB */
+    autoNonaktifPeserta();
 
     console.log("========================================");
     console.log("🚀 BPOM Internship API Server");
