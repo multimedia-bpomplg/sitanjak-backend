@@ -21,7 +21,11 @@ router.get("/", authMiddleware, getLaporanAkhir);
 router.post(
   "/upload",
   authMiddleware,
-  uploadLaporanAkhir.single("file"),
+  uploadLaporanAkhir.fields([
+    { name: "file", maxCount: 1 },
+    { name: "lampiran1", maxCount: 1 },
+    { name: "lampiran2", maxCount: 1 },
+  ]),
   uploadLaporanAkhirPdf,
 );
 router.get("/download", authMiddleware, downloadLaporanAkhirPdf);

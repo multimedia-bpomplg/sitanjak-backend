@@ -53,18 +53,52 @@ const LaporanAkhirSchema = new mongoose.Schema(
       unique: true, // 🔒 1 user hanya 1 laporan akhir
     },
 
-    // 🔥 UBAH: dari field-field teks menjadi file PDF
+    /* ================= FILE LAPORAN UTAMA ================= */
     filePdf: {
       type: String,
-      required: true, // path file PDF
+      required: true,
     },
+
     fileName: {
       type: String,
       required: true,
     },
+
     fileSize: {
       type: Number,
       required: true,
+    },
+
+    /* ================= FILE TAMBAHAN ================= */
+
+    lampiran1Pdf: {
+      type: String,
+      default: null,
+    },
+
+    lampiran1Name: {
+      type: String,
+      default: null,
+    },
+
+    lampiran1Size: {
+      type: Number,
+      default: null,
+    },
+
+    lampiran2Pdf: {
+      type: String,
+      default: null,
+    },
+
+    lampiran2Name: {
+      type: String,
+      default: null,
+    },
+
+    lampiran2Size: {
+      type: Number,
+      default: null,
     },
 
     /* ===== STATUS LAPORAN ===== */

@@ -33,51 +33,61 @@ export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
 
-    // Cek apakah sudah pernah upload
     const exists = await LaporanAkhir.findOne({ user: userId });
+
     if (exists) {
       return res.status(400).json({
-        message: "Laporan akhir sudah dikirim dan tidak dapat diubah",
+        message: "Laporan akhir sudah dikirim",
       });
     }
 
-    // Cek file
-    if (!req.file) {
-      return res.status(400).json({ message: "File PDF wajib diupload" });
-    }
+    const file = req.files?.file?.[0];
+    const lampiran1 = req.files?.lampiran1?.[0];
+    const lampiran2 = req.files?.lampiran2?.[0];
 
-    const file = req.file;
-
-    // Validasi ukuran file (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      fs.unlinkSync(file.path);
+    if (!file) {
       return res.status(400).json({
-        message: "Ukuran file maksimal 5MB",
+        message: "File laporan wajib diupload",
       });
     }
 
-    // Simpan ke database
+    if (lampiran1 && lampiran1.size > 2 * 1024 * 1024) {
+      return res.status(400).json({
+        message: "Lampiran 1 maksimal 2MB",
+      });
+    }
+
+    if (lampiran2 && lampiran2.size > 2 * 1024 * 1024) {
+      return res.status(400).json({
+        message: "Lampiran 2 maksimal 2MB",
+      });
+    }
+
     const laporan = await LaporanAkhir.create({
       user: userId,
+
       filePdf: file.path,
       fileName: file.originalname,
       fileSize: file.size,
-      status: "Menunggu",
+
+      lampiran1Pdf: lampiran1?.path || null,
+      lampiran1Name: lampiran1?.originalname || null,
+      lampiran1Size: lampiran1?.size || null,
+
+      lampiran2Pdf: lampiran2?.path || null,
+      lampiran2Name: lampiran2?.originalname || null,
+      lampiran2Size: lampiran2?.size || null,
     });
 
     res.status(201).json({
-      message: "Laporan akhir berhasil diupload",
-      laporan: {
-        _id: laporan._id,
-        fileName: laporan.fileName,
-        fileSize: laporan.fileSize,
-        status: laporan.status,
-        submittedAt: laporan.submittedAt,
-      },
+      message: "Upload berhasil",
+      laporan,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Gagal mengupload laporan akhir" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Gagal upload laporan",
+    });
   }
 };
 
