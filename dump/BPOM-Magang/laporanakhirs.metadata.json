@@ -1,1 +1,0 @@
-{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"user":{"$numberInt":"1"}},"name":"user_1","unique":true}],"uuid":"77a4115388464c8c92436f4821b6d224","collectionName":"laporanakhirs","type":"collection"}

@@ -1,1 +1,0 @@
-{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"phoneNumber":{"$numberInt":"1"}},"name":"phoneNumber_1","unique":true}],"uuid":"97406728afee4fc29043da20a96c9a5d","collectionName":"whatsapps","type":"collection"}
