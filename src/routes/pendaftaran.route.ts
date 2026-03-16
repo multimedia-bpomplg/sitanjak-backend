@@ -9,6 +9,8 @@ import {
   cekPendaftaran,
   updateStatus,
   setMentorPeserta,
+  deletePendaftaran,
+  updatePendaftaranData,
 } from "../controllers/pendaftaran.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
@@ -54,6 +56,20 @@ router.put(
   authMiddleware,
   roleMiddleware(["superadmin"]), // HANYA SUPERADMIN
   updateStatusMagang,
+);
+
+router.delete(
+  "/delete",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  deletePendaftaran,
+);
+
+router.put(
+  "/:id/edit",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  updatePendaftaranData,
 );
 
 export default router;

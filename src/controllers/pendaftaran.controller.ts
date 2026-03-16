@@ -504,3 +504,57 @@ export const setMentorPeserta = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Gagal set mentor peserta" });
   }
 };
+
+/* =========================
+   DELETE PENDAFTARAN
+========================= */
+export const deletePendaftaran = async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || ids.length === 0) {
+      return res.status(400).json({
+        message: "Tidak ada data yang dipilih",
+      });
+    }
+
+    await Pendaftaran.deleteMany({
+      _id: { $in: ids },
+    });
+
+    return res.json({
+      message: "Pendaftaran berhasil dihapus",
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      message: "Gagal menghapus pendaftaran",
+      error: err.message,
+    });
+  }
+};
+
+export const updatePendaftaranData = async (req: Request, res: Response) => {
+  try {
+    const { peserta } = req.body;
+
+    const data = await Pendaftaran.findById(req.params.id);
+
+    if (!data) {
+      return res.status(404).json({ message: "Pendaftaran tidak ditemukan" });
+    }
+
+    data.peserta = peserta;
+
+    await data.save();
+
+    res.json({
+      message: "Data pendaftaran berhasil diperbarui",
+      data,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      message: "Gagal mengupdate data",
+      error: err.message,
+    });
+  }
+};
