@@ -61,7 +61,7 @@ app.listen(PORT, async () => {
     /* START CRON JOB */
     autoNonaktifPeserta();
 
-    console.log("=========================================");
+    console.log("===========================================");
     console.log("🚀 BPOM Internship API Server");
     console.log("Status     : RUNNING");
     console.log("Database   : MongoDB Connected");
