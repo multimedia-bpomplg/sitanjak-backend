@@ -47,16 +47,17 @@ export const startWhatsapp = async () => {
       });
     }, 5000);
 
-    sock.ev.on("connection.update", (update: any) => {
+    sock.ev.on("connection.update", async (update: any) => {
       const { connection, qr, lastDisconnect } = update;
 
-      // QR hanya dibuat jika belum connected
+      // ✅ QR muncul (belum login)
       if (qr && connectionStatus !== "connected") {
         currentQR = qr;
         connectionStatus = "qr";
         console.log("📲 QR Generated");
       }
 
+      // ✅ Connected
       if (connection === "open") {
         connectionStatus = "connected";
         currentQR = null;
@@ -64,17 +65,44 @@ export const startWhatsapp = async () => {
         console.log("✅ WhatsApp Connected");
       }
 
+      // ❌ Jika koneksi tertutup
       if (connection === "close") {
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+
+        console.log("❌ Connection Closed:", statusCode);
+
         connectionStatus = "disconnected";
 
-        const shouldReconnect =
-          lastDisconnect?.error?.output?.statusCode !==
-          DisconnectReason.loggedOut;
+        // ❗ Jika logout / session rusak → RESET TOTAL
+        if (
+          statusCode === DisconnectReason.loggedOut ||
+          statusCode === 401 ||
+          statusCode === 403
+        ) {
+          console.log("🗑 Session invalid, reset ke QR ulang...");
 
-        if (shouldReconnect) {
-          console.log("🔄 Reconnecting WhatsApp...");
-          startWhatsapp();
+          const sessionPath = path.join(process.cwd(), "session");
+
+          if (fs.existsSync(sessionPath)) {
+            fs.rmSync(sessionPath, { recursive: true, force: true });
+          }
+
+          sock = null;
+          currentQR = null;
+
+          // ⏳ delay biar tidak bentrok
+          setTimeout(() => {
+            startWhatsapp();
+          }, 2000);
+
+          return;
         }
+
+        // 🔄 reconnect normal (tanpa reset)
+        console.log("🔄 Reconnecting...");
+        setTimeout(() => {
+          startWhatsapp();
+        }, 2000);
       }
     });
 
