@@ -34,18 +34,18 @@ const run = async () => {
      2️⃣ DATA USER
   =============================== */
   const users = [
-    {
-      email: "rifali.andi@gmail.com",
-      role: "superadmin",
-      password: "AhlinyasuperadminDariBpom2026",
-      isSuperAccess: true,
-    },
-    {
-      email: "midarwati.bpom@gmail.com",
-      role: "superadmin",
-      password: "Ahlinyasuperadminmenjadihebatdaribpom2026",
-      isSuperAccess: true,
-    },
+    // {
+    //   email: "rifali.andi@gmail.com",
+    //   role: "superadmin",
+    //   password: "AhlinyasuperadminDariBpom2026",
+    //   isSuperAccess: true,
+    // },
+    // {
+    //   email: "midarwati.bpom@gmail.com",
+    //   role: "superadmin",
+    //   password: "Ahlinyasuperadminmenjadihebatdaribpom2026",
+    //   isSuperAccess: true,
+    // },
     {
       email: "dyt343@gmail.com",
       role: "superadmin",
