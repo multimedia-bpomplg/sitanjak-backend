@@ -10,6 +10,7 @@ import {
 import Whatsapp from "../models/Whatsapp";
 import { sendWhatsapp } from "../utils/sendWhatsapp";
 import { sendWhatsappGroup } from "../utils/whatsappClient";
+import { createNotification } from "../services/notificationService";
 
 /* ================= TYPE UNTUK MULTER ================= */
 interface MulterRequest extends Request {
@@ -131,6 +132,15 @@ export const createPendaftaran = async (req: Request, res: Response) => {
       jumlahPeserta: jumlahFix,
       peserta: pesertaFix,
       suratPengantar: `surat-pengantar/${req.file.filename}`,
+    });
+
+    /* ================= NOTIFIKASI IN-APP SYSTEM ================= */
+    createNotification({
+      recipientRoles: ["admin", "superadmin"],
+      title: "Pendaftaran Magang Baru",
+      message: `${pesertaFix[0]?.nama || "Pendaftar"} (${pesertaFix[0]?.posisi || "Magang"}) telah mengirim berkas pendaftaran.`,
+      type: "info",
+      linkUrl: "/dashboard/admin/ViewPendaftaran",
     });
 
     /* ================= KIRIM NOTIFIKASI WHATSAPP ================= */

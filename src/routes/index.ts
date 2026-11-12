@@ -16,6 +16,7 @@ import whatsappRoutes from "./whatsappRoutes";
 import announcementRoutes from "./announcementRoutes";
 import informasiFungsiRoutes from "./informasiFungsiRoutes";
 import maintenanceRoutes from "./maintenanceRoutes";
+import notificationRoutes from "./notificationRoutes";
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use("/whatsapp", whatsappRoutes);
 router.use("/announcements", announcementRoutes);
 router.use("/informasi-fungsi", informasiFungsiRoutes);
 router.use("/maintenance", maintenanceRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

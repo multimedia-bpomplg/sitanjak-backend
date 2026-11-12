@@ -4,6 +4,7 @@ import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User"; // ✅ TAMBAH IMPORT INI
 import mongoose from "mongoose"; // ✅ TAMBAHKAN IMPORT INI
 import PDFDocument from "pdfkit";
+import { createNotification } from "../services/notificationService";
 
 /* ================= CREATE LOGBOOK ================= */
 export const createLogbook = async (req: any, res: Response) => {
@@ -95,6 +96,24 @@ export const createLogbook = async (req: any, res: Response) => {
       approvalStatus: "menunggu",
       approvedByMentor: false,
       isFinalized: false,
+    });
+
+    // Notifikasi ke Mentor
+    setImmediate(async () => {
+      try {
+        const sender = await User.findById(userId);
+        if (sender) {
+          createNotification({
+            recipientRoles: ["mentor"],
+            title: "Logbook Baru Dikirim",
+            message: `${sender.name || "Peserta"} telah mengisi logbook tanggal ${req.body.date}.`,
+            type: "info",
+            linkUrl: "/dashboard/mentor/ViewLogbook",
+          });
+        }
+      } catch (e) {
+        console.error("Gagal buat notifikasi logbook:", e);
+      }
     });
 
     res.status(201).json({
@@ -386,6 +405,15 @@ export const approveLogbook = async (req: Request, res: Response) => {
 
     await logbook.save();
 
+    // Notifikasi ke Peserta
+    createNotification({
+      recipientId: (logbook.user as any)._id,
+      title: approvalStatus === "disetujui" ? "Logbook Disetujui" : "Logbook Ditolak",
+      message: `Mentor Anda telah ${approvalStatus} logbook tanggal ${logbook.date}.`,
+      type: approvalStatus === "disetujui" ? "success" : "alert",
+      linkUrl: "/dashboard/peserta/isi-logbook",
+    });
+
     // 🔥 RESPONSE
     const message =
       approvalStatus === "disetujui"
@@ -610,6 +638,15 @@ export const requestRevision = async (req: Request, res: Response) => {
     logbook.approvedAt = null;
 
     await logbook.save();
+
+    // Notifikasi ke Peserta
+    createNotification({
+      recipientId: (logbook.user as any)._id,
+      title: "Revisi Logbook Diminta",
+      message: `Mentor meminta revisi logbook tanggal ${logbook.date}: "${revisionNote.trim()}"`,
+      type: "warning",
+      linkUrl: "/dashboard/peserta/isi-logbook",
+    });
 
     res.json({
       success: true,
