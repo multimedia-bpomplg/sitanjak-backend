@@ -8,7 +8,10 @@ import {
   buatAkunPeserta,
   getPeserta,
   updatePosisiPeserta,
+  nonaktifkanPeserta,
+  aktifkanPeserta,
 } from "../controllers/superadminController";
+import { getAdminDashboardSummary } from "../controllers/adminController";
 
 import {
   getMentor,
@@ -37,6 +40,14 @@ import { getAllLaporanAkhir } from "../controllers/superadminLaporanAkhirControl
 import { uploadSuratBalasan } from "../middlewares/upload.middleware";
 
 const router = Router();
+
+/* ================= DASHBOARD ================= */
+router.get(
+  "/dashboard-summary",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getAdminDashboardSummary,
+);
 
 /* ================= PENDAFTARAN ================= */
 router.get(
@@ -110,6 +121,20 @@ router.get(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   getPeserta,
+);
+
+router.patch(
+  "/peserta/:id/nonaktif",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  nonaktifkanPeserta,
+);
+
+router.patch(
+  "/peserta/:id/aktif",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  aktifkanPeserta,
 );
 
 /* ================= LOGBOOK ================= */

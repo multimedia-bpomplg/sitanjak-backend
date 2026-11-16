@@ -3,13 +3,10 @@ import Logbook from "../models/Logbook";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 
-/* ================= GET ALL LOGBOOK (SUPERADMIN) ================= */
+/* ================= GET ALL LOGBOOK (SUPERADMIN & ADMIN) ================= */
 export const getAllLogbook = async (req: any, res: Response) => {
   try {
-    // Ambil semua logbook yang sudah di-approve mentor
-    const logbooks = await Logbook.find({
-      approvalStatus: { $in: ["disetujui", "ditolak"] },
-    })
+    const logbooks = await Logbook.find()
       .populate("user", "name email")
       .populate("approvedBy", "name email")
       .sort({ date: -1 });
@@ -34,7 +31,7 @@ export const superadminApproveLogbook = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Logbook tidak ditemukan" });
     }
 
-    // Update status oleh superadmin
+    // Update status oleh admin / superadmin
     logbook.approvalStatus = approvalStatus;
     logbook.mentorNote = mentorNote || logbook.mentorNote;
     logbook.approvedByMentor = approvalStatus === "disetujui";
@@ -45,8 +42,10 @@ export const superadminApproveLogbook = async (req: any, res: Response) => {
 
     const message =
       approvalStatus === "disetujui"
-        ? "Logbook berhasil disetujui oleh Superadmin"
-        : "Logbook berhasil ditolak oleh Superadmin";
+        ? "Logbook berhasil disetujui"
+        : approvalStatus === "revisi"
+          ? "Logbook dikembalikan untuk revisi"
+          : "Logbook berhasil ditolak";
 
     res.json({
       success: true,

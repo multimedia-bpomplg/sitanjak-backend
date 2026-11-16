@@ -1,8 +1,12 @@
 import { Request, Response } from "express";
+import bcrypt from "bcryptjs";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
+import Role from "../models/Role";
 import { Multer } from "multer";
 import { sendEmail } from "../utils/sendEmail";
+import { generateStrongPassword } from "../utils/generatePassword";
+import { pesertaEmailTemplate } from "../utils/emailTemplate";
 import {
   diterimaMagangEmail,
   ditolakMagangEmail,
@@ -206,6 +210,37 @@ https://sitanjak.tech/
 };
 
 /* =========================
+    HELPER TANGGAL WIB
+  ========================= */
+const toWibIsoDate = (value?: string | Date | null): string | null => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+};
+
+const computeStatusMagangByDate = (
+  mulai?: string,
+  selesai?: string,
+  todayIso?: string,
+): "Belum Waktu Magang" | "Sedang Magang" | "Selesai Magang" | "Menunggu" => {
+  const startIso = toWibIsoDate(mulai);
+  const endIso = toWibIsoDate(selesai);
+  if (!startIso || !endIso) return "Menunggu";
+
+  const nowIso =
+    todayIso ||
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+
+  if (nowIso < startIso) return "Belum Waktu Magang";
+  if (nowIso > endIso) return "Selesai Magang";
+  return "Sedang Magang";
+};
+
+/* =========================
     GET ALL PENDAFTARAN
   ========================= */
 export const getAllPendaftaran = async (_req: Request, res: Response) => {
@@ -214,44 +249,38 @@ export const getAllPendaftaran = async (_req: Request, res: Response) => {
       .populate("peserta.mentor", "name email posisiMentor")
       .sort({ createdAt: -1 });
 
-    const today = new Date();
+    const todayIso = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Jakarta",
+    });
 
-    let changed = false;
+    const changedDocs: typeof data = [];
 
     data.forEach((d) => {
       if (d.status !== "Disetujui") return;
 
+      let docChanged = false;
       d.peserta.forEach((p) => {
-        const start = new Date(p.tanggalMulaiMagang);
-        const end = new Date(p.tanggalSelesaiMagang);
+        if (p.statusMagang === "Tidak Magang") return;
 
-        let newStatus = p.statusMagang;
+        const newStatus = computeStatusMagangByDate(
+          p.tanggalMulaiMagang,
+          p.tanggalSelesaiMagang,
+          todayIso,
+        );
 
-        // ✅ BELUM MULAI
-        if (today < start) {
-          newStatus = "Belum Waktu Magang";
-        }
-
-        // ✅ SEDANG
-        else if (today >= start && today <= end) {
-          newStatus = "Sedang Magang";
-        }
-
-        // ✅ SELESAI
-        else {
-          newStatus = "Selesai Magang";
-        }
-
-        if (newStatus !== p.statusMagang) {
+        if (newStatus !== "Menunggu" && newStatus !== p.statusMagang) {
           p.statusMagang = newStatus;
-          changed = true;
+          docChanged = true;
         }
       });
+
+      if (docChanged) {
+        changedDocs.push(d);
+      }
     });
 
-    // Simpan kalau ada perubahan
-    if (changed) {
-      await Promise.all(data.map((d) => d.save()));
+    if (changedDocs.length > 0) {
+      await Promise.all(changedDocs.map((d) => d.save()));
     }
 
     return res.json(data);
@@ -318,6 +347,15 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
       });
     }
 
+    if (
+      pendaftaran.status === "Disetujui" ||
+      pendaftaran.status === "Ditolak"
+    ) {
+      return res.status(400).json({
+        message: `Pendaftaran sudah berstatus ${pendaftaran.status} dan tidak dapat diubah lagi`,
+      });
+    }
+
     /* ================= UPDATE DATA ================= */
 
     pendaftaran.status = status;
@@ -329,19 +367,19 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
 
     /* ================= UPDATE STATUS MAGANG ================= */
 
-    const today = new Date();
+    const todayIso = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Jakarta",
+    });
 
     if (status === "Disetujui") {
       pendaftaran.peserta.forEach((p) => {
-        const start = new Date(p.tanggalMulaiMagang);
-        const end = new Date(p.tanggalSelesaiMagang);
-
-        if (today < start) {
-          p.statusMagang = "Belum Waktu Magang";
-        } else if (today >= start && today <= end) {
-          p.statusMagang = "Sedang Magang";
-        } else {
-          p.statusMagang = "Selesai Magang";
+        const computed = computeStatusMagangByDate(
+          p.tanggalMulaiMagang,
+          p.tanggalSelesaiMagang,
+          todayIso,
+        );
+        if (computed !== "Menunggu") {
+          p.statusMagang = computed;
         }
       });
     }
@@ -356,12 +394,19 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
 
     await pendaftaran.save();
 
-    /* ================= KIRIM EMAIL ================= */
+    /* ================= AUTO BUAT AKUN + KIRIM EMAIL ================= */
 
-    Promise.all(
+    let accountsCreated = 0;
+    const rolePeserta =
+      status === "Disetujui" ? await Role.findOne({ name: "peserta" }) : null;
+
+    await Promise.all(
       pendaftaran.peserta.map(async (peserta) => {
-        try {
-          if (status === "Disetujui") {
+        const normalizedEmail = (peserta.email || "").trim().toLowerCase();
+
+        if (status === "Disetujui") {
+          // 1. Kirim email pemberitahuan diterima magang
+          try {
             const emailData = diterimaMagangEmail({
               name: peserta.nama,
               email: peserta.email,
@@ -375,9 +420,67 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
               subject: emailData.subject,
               html: emailData.html,
             });
+          } catch (mailError) {
+            console.error(
+              `❌ Gagal kirim email persetujuan ke ${peserta.email}`,
+              mailError,
+            );
           }
 
-          if (status === "Ditolak") {
+          // 2. Auto-buat akun peserta jika email belum terdaftar
+          if (normalizedEmail && rolePeserta) {
+            try {
+              const escaped = normalizedEmail.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&",
+              );
+              const existingUser = await User.findOne({
+                email: { $regex: new RegExp(`^${escaped}$`, "i") },
+              });
+
+              if (!existingUser) {
+                const plainPassword = generateStrongPassword(10);
+                const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+                await User.create({
+                  name: peserta.nama,
+                  email: normalizedEmail,
+                  password: hashedPassword,
+                  roles: [rolePeserta._id],
+                  status: "Aktif",
+                  jurusan: peserta.jurusan || "",
+                });
+
+                accountsCreated += 1;
+
+                try {
+                  await sendEmail({
+                    to: normalizedEmail,
+                    subject: "Akun Magang Anda Telah Dibuat",
+                    html: pesertaEmailTemplate({
+                      name: peserta.nama,
+                      email: normalizedEmail,
+                      password: plainPassword,
+                    }),
+                  });
+                } catch (credMailError) {
+                  console.error(
+                    `❌ Akun dibuat, tetapi gagal kirim email kredensial ke ${normalizedEmail}`,
+                    credMailError,
+                  );
+                }
+              }
+            } catch (accountError) {
+              console.error(
+                `❌ Gagal auto-buat akun untuk ${normalizedEmail}`,
+                accountError,
+              );
+            }
+          }
+        }
+
+        if (status === "Ditolak") {
+          try {
             const emailData = ditolakMagangEmail({
               name: peserta.nama,
               email: peserta.email,
@@ -389,9 +492,12 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
               subject: emailData.subject,
               html: emailData.html,
             });
+          } catch (mailError) {
+            console.error(
+              `❌ Gagal kirim email penolakan ke ${peserta.email}`,
+              mailError,
+            );
           }
-        } catch (mailError) {
-          console.error(`❌ Gagal kirim email ke ${peserta.email}`, mailError);
         }
       }),
     );
@@ -399,7 +505,11 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
     /* ================= RESPONSE ================= */
 
     return res.json({
-      message: "Status berhasil diperbarui & email terkirim",
+      message:
+        status === "Disetujui" && accountsCreated > 0
+          ? `Status berhasil diperbarui, email terkirim, dan ${accountsCreated} akun peserta otomatis dibuat`
+          : "Status berhasil diperbarui & email terkirim",
+      accountsCreated,
       data: pendaftaran,
     });
   } catch (err: any) {
@@ -473,23 +583,22 @@ export const setMentorPeserta = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Mentor tidak ditemukan" });
     }
 
-    const pendaftaran = await Pendaftaran.findOne({
-      _id: req.params.id,
-      "peserta.email": email,
-    });
+    const pendaftaran = await Pendaftaran.findById(req.params.id);
 
     if (!pendaftaran) {
-      return res.status(404).json({ message: "Peserta tidak ditemukan" });
+      return res.status(404).json({ message: "Pendaftaran tidak ditemukan" });
     }
 
-    // ✅ Pastikan peserta ada
     if (!pendaftaran.peserta || pendaftaran.peserta.length === 0) {
       return res.status(400).json({
         message: "Data peserta tidak tersedia",
       });
     }
 
-    const peserta = pendaftaran.peserta.find((p: any) => p.email === email);
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const peserta = pendaftaran.peserta.find(
+      (p: any) => p.email?.toLowerCase() === normalizedEmail,
+    );
 
     if (!peserta) {
       return res.status(404).json({
