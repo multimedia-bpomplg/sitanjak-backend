@@ -14,17 +14,22 @@ import { adminEmailTemplate } from "../utils/adminEmailTemplate";
 /* ================= BUAT ADMIN + EMAIL ================= */
 export const buatAdmin = async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const rawName = String(req.body?.name || "").trim();
+    const rawEmail = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
 
     /* VALIDASI */
-    if (!name || !email || !password) {
+    if (!rawName || !rawEmail || !password) {
       return res.status(400).json({
         message: "Nama, email, dan password wajib diisi",
       });
     }
 
-    /* CEK EMAIL */
-    const exists = await User.findOne({ email });
+    /* CEK EMAIL (CASE-INSENSITIVE) */
+    const escapedEmail = rawEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const exists = await User.findOne({
+      email: { $regex: `^${escapedEmail}$`, $options: "i" },
+    });
     if (exists) {
       return res.status(409).json({
         message: "Email sudah terdaftar",
@@ -44,8 +49,8 @@ export const buatAdmin = async (req: Request, res: Response) => {
 
     /* CREATE USER */
     const admin = await User.create({
-      name,
-      email,
+      name: rawName,
+      email: rawEmail,
       password: hashedPassword,
       roles: [roleAdmin._id],
       status: "Aktif",
@@ -54,11 +59,11 @@ export const buatAdmin = async (req: Request, res: Response) => {
 
     /* KIRIM EMAIL */
     await sendEmail({
-      to: email,
+      to: rawEmail,
       subject: "Akun Admin Sistem Magang BPOM",
       html: adminEmailTemplate({
-        name,
-        email,
+        name: rawName,
+        email: rawEmail,
         password, // ⚠️ hanya dikirim via email
       }),
     });

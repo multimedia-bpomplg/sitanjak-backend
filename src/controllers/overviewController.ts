@@ -18,13 +18,22 @@ import {
   getDaysInMonth as getDaysInMonthFromDateFns, // RENAME IMPORT
 } from "date-fns";
 
+const getTodayWibBounds = () => {
+  const todayStr = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Jakarta",
+  });
+  return {
+    todayStr,
+    todayStart: new Date(`${todayStr}T00:00:00+07:00`),
+    todayEnd: new Date(`${todayStr}T23:59:59.999+07:00`),
+  };
+};
+
 /* ================= GET REAL-TIME STATS (REAL-TIME VERSION) ================= */
 export const getOverviewStats = async (req: Request, res: Response) => {
   try {
     const today = new Date();
-    const todayStart = startOfDay(today);
-    const todayEnd = endOfDay(today);
-    const todayStr = format(today, "yyyy-MM-dd");
+    const { todayStr, todayStart, todayEnd } = getTodayWibBounds();
 
     // 1. Hitung peserta aktif dari User dengan role peserta
     const pesertaRole = await Role.findOne({ name: "peserta" });
@@ -140,6 +149,7 @@ export const getOverviewStats = async (req: Request, res: Response) => {
     }
 
     // Simpan ke database untuk histori (opsional)
+    const [wibYear, wibMonth] = todayStr.split("-").map(Number);
     const overviewData = {
       pesertaAktif,
       mentorAktif,
@@ -149,9 +159,9 @@ export const getOverviewStats = async (req: Request, res: Response) => {
       logbookHariIni,
       totalLogbook,
       totalPendaftar,
-      date: today,
-      year: today.getFullYear(),
-      month: today.getMonth() + 1,
+      date: todayStart,
+      year: wibYear,
+      month: wibMonth,
       statistikPosisi,
       statistikAsal,
       statistikGender,
@@ -1397,9 +1407,7 @@ export const getApiStatus = async (req: Request, res: Response) => {
 
 const getCurrentStats = async () => {
   try {
-    const today = new Date();
-    const todayStart = startOfDay(today);
-    const todayEnd = endOfDay(today);
+    const { todayStr, todayStart, todayEnd } = getTodayWibBounds();
 
     const pesertaRoleId = await getRoleId("peserta");
     const mentorRoleId = await getRoleId("mentor");
@@ -1431,7 +1439,7 @@ const getCurrentStats = async () => {
       Pendaftaran.countDocuments({ status: "Disetujui" }),
       Logbook.countDocuments({
         $or: [
-          { date: format(today, "yyyy-MM-dd") },
+          { date: todayStr },
           { createdAt: { $gte: todayStart, $lte: todayEnd } },
         ],
       }),

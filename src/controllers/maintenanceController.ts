@@ -68,6 +68,14 @@ export const deactivateMaintenance = async (req: any, res: Response) => {
     return res.status(404).json({ message: "No maintenance data" });
   }
 
+  const now = new Date();
+  if (maintenance.history.length > 0) {
+    const lastEntry = maintenance.history[maintenance.history.length - 1];
+    if (!lastEntry.endTime || new Date(lastEntry.endTime) > now) {
+      lastEntry.endTime = now;
+    }
+  }
+
   maintenance.isActive = false;
   maintenance.startTime = null;
   maintenance.endTime = null;
@@ -83,18 +91,33 @@ export const getMaintenanceStatus = async (req: Request, res: Response) => {
   const maintenance = await Maintenance.findOne();
 
   if (!maintenance) {
-    return res.json({ isActive: false });
+    return res.json({
+      isActive: false,
+      isManual: false,
+      startTime: null,
+      endTime: null,
+      activatedBy: null,
+      history: [],
+    });
   }
 
   // ===============================
   // 🔥 AUTO NONAKTIF JIKA WAKTU HABIS
   // ===============================
+  const now = new Date();
   if (
     maintenance.isActive &&
     !maintenance.isManual &&
     maintenance.endTime &&
-    new Date() > maintenance.endTime
+    now > maintenance.endTime
   ) {
+    if (maintenance.history.length > 0) {
+      const lastEntry = maintenance.history[maintenance.history.length - 1];
+      if (!lastEntry.endTime) {
+        lastEntry.endTime = maintenance.endTime || now;
+      }
+    }
+
     maintenance.isActive = false;
     maintenance.startTime = null;
     maintenance.endTime = null;
@@ -103,13 +126,22 @@ export const getMaintenanceStatus = async (req: Request, res: Response) => {
 
     await maintenance.save();
 
-    return res.json({ isActive: false });
+    return res.json({
+      isActive: false,
+      isManual: false,
+      startTime: null,
+      endTime: null,
+      activatedBy: null,
+      history: maintenance.history,
+    });
   }
 
   res.json({
     isActive: maintenance.isActive,
     isManual: maintenance.isManual,
+    startTime: maintenance.startTime,
     endTime: maintenance.endTime,
+    activatedBy: maintenance.activatedBy,
     history: maintenance.history,
   });
 };

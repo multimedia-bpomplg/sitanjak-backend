@@ -656,15 +656,51 @@ export const updatePendaftaranData = async (req: Request, res: Response) => {
   try {
     const { peserta } = req.body;
 
+    if (!Array.isArray(peserta) || peserta.length === 0) {
+      return res.status(400).json({
+        message: "Data peserta tidak valid atau kosong",
+      });
+    }
+
     const data = await Pendaftaran.findById(req.params.id);
 
     if (!data) {
       return res.status(404).json({ message: "Pendaftaran tidak ditemukan" });
     }
 
-    data.peserta = peserta;
+    const todayIso = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Jakarta",
+    });
+
+    const normalizedPeserta = peserta.map((p: any, idx: number) => {
+      const existing = data.peserta[idx];
+      const rawMentor = p?.mentor;
+      const mentorId =
+        rawMentor && typeof rawMentor === "object"
+          ? rawMentor._id
+          : rawMentor || existing?.mentor;
+
+      let statusMagang = p?.statusMagang || existing?.statusMagang || "Menunggu";
+      if (data.status === "Disetujui") {
+        const computed = computeStatusMagangByDate(
+          p?.tanggalMulaiMagang ?? undefined,
+          p?.tanggalSelesaiMagang ?? undefined,
+          todayIso,
+        );
+        if (computed !== "Menunggu") statusMagang = computed;
+      }
+
+      return {
+        ...p,
+        mentor: mentorId || undefined,
+        statusMagang,
+      };
+    });
+
+    data.peserta = normalizedPeserta as any;
 
     await data.save();
+    await data.populate("peserta.mentor", "name email posisiMentor");
 
     res.json({
       message: "Data pendaftaran berhasil diperbarui",
