@@ -1,11 +1,14 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import User from "../models/User";
 import Role from "../models/Role";
 import { sendEmail } from "../utils/sendEmail";
 import { mentorEmailTemplate } from "../utils/mentorEmailTemplate";
 import Pendaftaran from "../models/pendaftaran";
 import Logbook from "../models/Logbook";
+import LaporanAkhir from "../models/LaporanAkhir";
+import Feedback from "../models/Feedback";
 
 /* ================= BUAT AKUN MENTOR + EMAIL ================= */
 export const buatMentor = async (req: Request, res: Response) => {
@@ -102,59 +105,315 @@ export const aktifkanMentor = async (req: Request, res: Response) => {
   }
 };
 
+type InternshipPhase = "belum_mulai" | "sedang_magang" | "selesai" | "tidak_magang";
+
+const toWibIsoDate = (value?: string | Date | null): string | null => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+};
+
+const resolveInternshipPhase = (
+  ps: {
+    statusMagang?: string;
+    tanggalMulaiMagang?: string;
+    tanggalSelesaiMagang?: string;
+  },
+  todayIso: string,
+): InternshipPhase => {
+  if (ps.statusMagang === "Tidak Magang") return "tidak_magang";
+  if (ps.statusMagang === "Selesai Magang") return "selesai";
+
+  const startIso = toWibIsoDate(ps.tanggalMulaiMagang);
+  const endIso = toWibIsoDate(ps.tanggalSelesaiMagang);
+
+  if (startIso && todayIso < startIso) return "belum_mulai";
+  if (endIso && todayIso > endIso) return "selesai";
+  if (startIso || endIso) return "sedang_magang";
+
+  if (ps.statusMagang === "Belum Waktu Magang") return "belum_mulai";
+  return "sedang_magang";
+};
+
+const mapPesertaRecord = (ps: any, pendaftaran: any) => ({
+  /* ================= IDENTITAS ================= */
+  userId: ps.user ? ps.user.toString() : null,
+  nama: ps.nama,
+  email: ps.email,
+  wa: ps.wa,
+  posisi: ps.posisi,
+  jurusan: ps.jurusan,
+  asal: ps.asal
+    ? {
+        jenis: ps.asal.jenis || "",
+        nama: ps.asal.nama || "",
+      }
+    : null,
+  kategori: pendaftaran.kategori || "sendiri",
+  statusMagang: ps.statusMagang || "Menunggu",
+
+  /* ================= DATA DIRI ================= */
+  jenisKelamin: ps.jenisKelamin,
+  tempatLahir: ps.tempatLahir,
+  tanggalLahir: ps.tanggalLahir,
+
+  /* ================= INFORMASI MAGANG ================= */
+  tanggalMulaiMagang: ps.tanggalMulaiMagang,
+  tanggalSelesaiMagang: ps.tanggalSelesaiMagang,
+
+  /* ================= ALAMAT ================= */
+  provinsi: ps.provinsi,
+  kota: ps.kota,
+  kecamatan: ps.kecamatan,
+  kelurahan: ps.kelurahan,
+  alamatLengkap: ps.alamatLengkap,
+
+  /* ================= MENTOR ================= */
+  mentor: ps.mentor
+    ? {
+        name: ps.mentor.name,
+        email: ps.mentor.email,
+        posisiMentor: ps.mentor.posisiMentor,
+      }
+    : null,
+});
+
+const fetchMentorPesertaRecords = async (mentorId: string) => {
+  const pendaftaranList = await Pendaftaran.find({
+    status: "Disetujui",
+    "peserta.mentor": mentorId,
+  }).populate("peserta.mentor", "name email posisiMentor");
+
+  return pendaftaranList.flatMap((pendaftaran) =>
+    pendaftaran.peserta
+      .filter((ps: any) => ps.mentor && ps.mentor._id.toString() === mentorId)
+      .map((ps: any) => mapPesertaRecord(ps, pendaftaran)),
+  );
+};
+
 /* ================= GET PESERTA BIMBINGAN (FULL + MAGANG DATE) ================= */
 export const getPesertaBimbingan = async (req: any, res: Response) => {
   try {
-    const mentorId = req.user.id;
-
-    const pendaftaranList = await Pendaftaran.find({
-      status: "Disetujui",
-      "peserta.mentor": mentorId,
-    }).populate("peserta.mentor", "name email posisiMentor");
-
-    const peserta = pendaftaranList.flatMap((pendaftaran) =>
-      pendaftaran.peserta
-        .filter((ps: any) => ps.mentor && ps.mentor._id.toString() === mentorId)
-        .map((ps: any) => ({
-          /* ================= IDENTITAS ================= */
-          nama: ps.nama,
-          email: ps.email,
-          wa: ps.wa,
-          posisi: ps.posisi,
-          jurusan: ps.jurusan,
-
-          /* ================= DATA DIRI ================= */
-          jenisKelamin: ps.jenisKelamin,
-          tempatLahir: ps.tempatLahir,
-          tanggalLahir: ps.tanggalLahir,
-
-          /* ================= INFORMASI MAGANG (INI YANG KURANG) ================= */
-          tanggalMulaiMagang: ps.tanggalMulaiMagang,
-          tanggalSelesaiMagang: ps.tanggalSelesaiMagang,
-
-          /* ================= ALAMAT ================= */
-          provinsi: ps.provinsi,
-          kota: ps.kota,
-          kecamatan: ps.kecamatan,
-          kelurahan: ps.kelurahan,
-          alamatLengkap: ps.alamatLengkap,
-
-          /* ================= MENTOR ================= */
-          mentor: ps.mentor
-            ? {
-                name: ps.mentor.name,
-                email: ps.mentor.email,
-                posisiMentor: ps.mentor.posisiMentor,
-              }
-            : null,
-        })),
-    );
-
+    const peserta = await fetchMentorPesertaRecords(req.user.id);
     res.json(peserta);
   } catch (err) {
     console.error("[GET PESERTA BIMBINGAN]", err);
     res.status(500).json({
       message: "Gagal memuat peserta bimbingan",
+    });
+  }
+};
+
+/* ================= GET DASHBOARD SUMMARY MENTOR ================= */
+export const getMentorDashboardSummary = async (req: any, res: Response) => {
+  try {
+    const mentorId = req.user.id;
+    const [mentorUser, pesertaRecords] = await Promise.all([
+      User.findById(mentorId).select("name email posisiMentor"),
+      fetchMentorPesertaRecords(mentorId),
+    ]);
+
+    const emailSet = Array.from(
+      new Set(
+        pesertaRecords
+          .map((p) => p.email?.trim())
+          .filter((email): email is string => Boolean(email)),
+      ),
+    );
+
+    const matchedUsers = emailSet.length
+      ? await User.find({
+          email: {
+            $in: emailSet.map((e) => new RegExp(`^${e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i")),
+          },
+        }).select("_id email")
+      : [];
+
+    const emailToUserId = new Map<string, string>();
+    matchedUsers.forEach((u) => {
+      if (u.email) {
+        emailToUserId.set(u.email.toLowerCase(), u._id.toString());
+      }
+    });
+
+    const resolvedUserIds = Array.from(
+      new Set([
+        ...matchedUsers.map((u) => u._id.toString()),
+        ...pesertaRecords
+          .map((p) => p.userId)
+          .filter((id): id is string => Boolean(id && mongoose.Types.ObjectId.isValid(id))),
+      ]),
+    ).map((id) => new mongoose.Types.ObjectId(id));
+
+    const [logbookAgg, laporanList, feedbackList] = resolvedUserIds.length
+      ? await Promise.all([
+          Logbook.aggregate([
+            { $match: { user: { $in: resolvedUserIds } } },
+            {
+              $group: {
+                _id: "$user",
+                total: { $sum: 1 },
+                menunggu: {
+                  $sum: {
+                    $cond: [{ $eq: ["$approvalStatus", "menunggu"] }, 1, 0],
+                  },
+                },
+                revisi: {
+                  $sum: {
+                    $cond: [{ $eq: ["$approvalStatus", "revisi"] }, 1, 0],
+                  },
+                },
+                disetujui: {
+                  $sum: {
+                    $cond: [{ $eq: ["$approvalStatus", "disetujui"] }, 1, 0],
+                  },
+                },
+                ditolak: {
+                  $sum: {
+                    $cond: [{ $eq: ["$approvalStatus", "ditolak"] }, 1, 0],
+                  },
+                },
+                latestLogbookDate: { $max: "$date" },
+              },
+            },
+          ]),
+          LaporanAkhir.find({ user: { $in: resolvedUserIds } })
+            .select("user status fileName submittedAt approvedAt createdAt")
+            .lean(),
+          Feedback.find({ user: { $in: resolvedUserIds } })
+            .select("user month mentorResponse isFeedbackMentorSent status createdAt")
+            .lean(),
+        ])
+      : [[], [], []];
+
+    const logbookMap = new Map<string, any>();
+    logbookAgg.forEach((item: any) => {
+      logbookMap.set(item._id.toString(), {
+        total: item.total || 0,
+        menunggu: item.menunggu || 0,
+        revisi: item.revisi || 0,
+        disetujui: item.disetujui || 0,
+        ditolak: item.ditolak || 0,
+        latestLogbookDate: item.latestLogbookDate || null,
+      });
+    });
+
+    const laporanMap = new Map<string, any>();
+    laporanList.forEach((lap: any) => {
+      laporanMap.set(lap.user.toString(), {
+        _id: lap._id.toString(),
+        status: lap.status,
+        fileName: lap.fileName,
+        submittedAt: lap.submittedAt || lap.createdAt,
+        approvedAt: lap.approvedAt || null,
+      });
+    });
+
+    const feedbackMap = new Map<string, { total: number; belumDirespon: number }>();
+    feedbackList.forEach((fb: any) => {
+      const uid = fb.user.toString();
+      const prev = feedbackMap.get(uid) || { total: 0, belumDirespon: 0 };
+      prev.total += 1;
+      if (!fb.mentorResponse || !String(fb.mentorResponse).trim()) {
+        prev.belumDirespon += 1;
+      }
+      feedbackMap.set(uid, prev);
+    });
+
+    const todayIso = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Jakarta",
+    });
+
+    const enrichedPeserta = pesertaRecords.map((p) => {
+      const resolvedUserId =
+        p.userId || (p.email ? emailToUserId.get(p.email.toLowerCase()) || null : null);
+      const logbookStats = (resolvedUserId && logbookMap.get(resolvedUserId)) || {
+        total: 0,
+        menunggu: 0,
+        revisi: 0,
+        disetujui: 0,
+        ditolak: 0,
+        latestLogbookDate: null,
+      };
+      const laporanAkhir = (resolvedUserId && laporanMap.get(resolvedUserId)) || null;
+      const feedbackStats = (resolvedUserId && feedbackMap.get(resolvedUserId)) || {
+        total: 0,
+        belumDirespon: 0,
+      };
+      const phase = resolveInternshipPhase(p, todayIso);
+
+      return {
+        ...p,
+        userId: resolvedUserId,
+        phase,
+        logbookStats,
+        laporanAkhir,
+        feedbackStats,
+      };
+    });
+
+    const summary = {
+      totalPeserta: enrichedPeserta.length,
+      sedangMagang: enrichedPeserta.filter((p) => p.phase === "sedang_magang").length,
+      belumMulai: enrichedPeserta.filter((p) => p.phase === "belum_mulai").length,
+      selesaiMagang: enrichedPeserta.filter((p) => p.phase === "selesai").length,
+      pesertaDenganLogbookMenunggu: enrichedPeserta.filter(
+        (p) => p.logbookStats.menunggu > 0,
+      ).length,
+      totalLogbookMenunggu: enrichedPeserta.reduce(
+        (acc, p) => acc + p.logbookStats.menunggu,
+        0,
+      ),
+      pesertaDenganLogbookRevisi: enrichedPeserta.filter(
+        (p) => p.logbookStats.revisi > 0,
+      ).length,
+      totalLogbookRevisi: enrichedPeserta.reduce(
+        (acc, p) => acc + p.logbookStats.revisi,
+        0,
+      ),
+      totalLogbookDisetujui: enrichedPeserta.reduce(
+        (acc, p) => acc + p.logbookStats.disetujui,
+        0,
+      ),
+      laporanAkhirMenunggu: enrichedPeserta.filter(
+        (p) => p.laporanAkhir?.status === "Menunggu",
+      ).length,
+      laporanAkhirDisetujui: enrichedPeserta.filter(
+        (p) => p.laporanAkhir?.status === "Disetujui",
+      ).length,
+      laporanAkhirDitolak: enrichedPeserta.filter(
+        (p) => p.laporanAkhir?.status === "Ditolak",
+      ).length,
+      totalLaporanAkhir: enrichedPeserta.filter((p) => Boolean(p.laporanAkhir)).length,
+      feedbackTotal: enrichedPeserta.reduce(
+        (acc, p) => acc + p.feedbackStats.total,
+        0,
+      ),
+      feedbackBelumDirespon: enrichedPeserta.reduce(
+        (acc, p) => acc + p.feedbackStats.belumDirespon,
+        0,
+      ),
+    };
+
+    res.json({
+      mentor: mentorUser
+        ? {
+            name: mentorUser.name,
+            email: mentorUser.email,
+            posisiMentor: mentorUser.posisiMentor || "",
+          }
+        : null,
+      summary,
+      peserta: enrichedPeserta,
+    });
+  } catch (err) {
+    console.error("[GET MENTOR DASHBOARD SUMMARY]", err);
+    res.status(500).json({
+      message: "Gagal memuat ringkasan dashboard mentor",
     });
   }
 };

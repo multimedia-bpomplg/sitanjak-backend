@@ -3,6 +3,7 @@ import {
   buatMentor,
   getPesertaBimbingan,
   getPesertaDetail,
+  getMentorDashboardSummary,
 } from "../controllers/mentorController";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
@@ -14,6 +15,13 @@ router.post(
   authMiddleware,
   roleMiddleware(["superadmin"]),
   buatMentor,
+);
+
+router.get(
+  "/dashboard-summary",
+  authMiddleware,
+  roleMiddleware(["mentor"]),
+  getMentorDashboardSummary,
 );
 
 router.get(
