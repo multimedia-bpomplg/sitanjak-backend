@@ -118,6 +118,32 @@ export const createLogbook = async (req: any, res: Response) => {
       });
     }
 
+    // Validasi minimal 150 karakter untuk Uraian Aktivitas, Pembelajaran, dan Kendala
+    if (req.body.status === "hadir") {
+      const judulLen = String(req.body.judul || "").trim().length;
+      const pengalamanLen = String(req.body.pengalaman || "").trim().length;
+      const kendalaLen = String(req.body.kendala || "").trim().length;
+
+      if (judulLen < 150 || pengalamanLen < 150 || kendalaLen < 150) {
+        const removeTempFile = (relPath?: string) => {
+          if (!relPath) return;
+          try {
+            const fullPath = path.join(process.cwd(), relPath);
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+          } catch {
+            // ignore cleanup error
+          }
+        };
+        images.forEach((imgPath) => removeTempFile(imgPath));
+        removeTempFile(pdfFilePath);
+
+        return res.status(400).json({
+          message:
+            "Uraian Aktivitas, Pembelajaran yang Diperoleh, dan Kendala masing-masing wajib minimal 150 karakter.",
+        });
+      }
+    }
+
     // 🔥 CREATE BARU
     const logbook = await Logbook.create({
       user: userId,

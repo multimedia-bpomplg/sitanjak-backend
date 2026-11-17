@@ -24,6 +24,11 @@ export const createNotification = async (dto: CreateNotificationDTO) => {
       linkUrl: dto.linkUrl || "",
       readBy: [],
     });
+
+    // Bersihkan notifikasi lama (> 7 hari) secara asynchronous agar database tidak menumpuk berbulan-bulan
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    Notification.deleteMany({ createdAt: { $lt: sevenDaysAgo } }).catch(() => {});
+
     return notif;
   } catch (error) {
     console.error("❌ [NotificationService] Gagal membuat notifikasi:", error);
@@ -31,17 +36,40 @@ export const createNotification = async (dto: CreateNotificationDTO) => {
   }
 };
 
+const getTodayWibBounds = () => {
+  const todayStr = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Jakarta",
+  });
+  return {
+    todayStart: new Date(`${todayStr}T00:00:00+07:00`),
+    todayEnd: new Date(`${todayStr}T23:59:59.999+07:00`),
+  };
+};
+
+const buildRecipientFilter = (userObjId: Types.ObjectId, userRoles: string[]) => ({
+  $or: [
+    { recipientId: userObjId },
+    { recipientRoles: { $in: userRoles } },
+  ],
+});
+
 /**
- * Mengambil daftar notifikasi untuk user (berdasarkan ID spesifik atau role user)
+ * Mengambil daftar notifikasi HARI INI (WIB) untuk user (berdasarkan ID spesifik atau role user)
  */
-export const getUserNotifications = async (userId: string, userRoles: string[], limit: number = 20) => {
+export const getUserNotifications = async (
+  userId: string,
+  userRoles: string[],
+  limit: number = 50
+) => {
   const userObjId = new Types.ObjectId(userId);
+  const { todayStart, todayEnd } = getTodayWibBounds();
 
   const filter = {
-    $or: [
-      { recipientId: userObjId },
-      { recipientRoles: { $in: userRoles } },
-    ],
+    ...buildRecipientFilter(userObjId, userRoles),
+    createdAt: {
+      $gte: todayStart,
+      $lte: todayEnd,
+    },
   };
 
   const notifications = await Notification.find(filter)
@@ -56,7 +84,9 @@ export const getUserNotifications = async (userId: string, userRoles: string[], 
     type: n.type,
     linkUrl: n.linkUrl,
     createdAt: n.createdAt,
-    isRead: Array.isArray(n.readBy) && n.readBy.some((uid: any) => uid.toString() === userId),
+    isRead:
+      Array.isArray(n.readBy) &&
+      n.readBy.some((uid: any) => uid.toString() === userId),
   }));
 
   const unreadCount = await Notification.countDocuments({
@@ -88,12 +118,7 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
  */
 export const markAllNotificationsAsRead = async (userId: string, userRoles: string[]) => {
   const userObjId = new Types.ObjectId(userId);
-  const filter = {
-    $or: [
-      { recipientId: userObjId },
-      { recipientRoles: { $in: userRoles } },
-    ],
-  };
+  const filter = buildRecipientFilter(userObjId, userRoles);
 
   await Notification.updateMany(filter, {
     $addToSet: { readBy: userObjId },

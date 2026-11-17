@@ -15,7 +15,7 @@ export const getMyNotifications = async (req: AuthRequest, res: Response) => {
     const { notifications, unreadCount } = await getUserNotifications(
       req.user.id,
       req.user.roles,
-      25
+      50
     );
 
     return res.status(200).json({
