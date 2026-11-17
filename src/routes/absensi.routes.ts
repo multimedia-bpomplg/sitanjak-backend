@@ -57,7 +57,7 @@ router.get(
 router.patch(
   "/manage/:id/koreksi",
   authMiddleware,
-  roleMiddleware(["mentor", "admin", "superadmin"]),
+  roleMiddleware(["mentor"]),
   koreksiAbsensi,
 );
 

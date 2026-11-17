@@ -1331,6 +1331,13 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
 // PATCH /api/absensi/manage/:id/koreksi
 export const koreksiAbsensi = async (req: any, res: Response) => {
   try {
+    const roles: string[] = Array.isArray(req.user?.roles) ? req.user.roles : [];
+    if (!roles.includes("mentor")) {
+      return res.status(403).json({
+        message: "Hanya mentor pembimbing yang dapat melakukan koreksi nilai absensi.",
+      });
+    }
+
     const { id } = req.params;
     const { target, koreksiNote } = req.body;
 
