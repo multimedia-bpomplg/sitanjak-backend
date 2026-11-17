@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import Pendaftaran from "../models/pendaftaran";
-import Formasi from "../models/Formasi";
+import Formasi, { IKuotaBulanan } from "../models/Formasi";
 
 // Default Formasi
 const DEFAULT_FORMASI = [
@@ -10,6 +10,56 @@ const DEFAULT_FORMASI = [
   "Fungsi Pemeriksaan",
   "Fungsi Infokom",
 ];
+
+const MONTH_KEY_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+const getCurrentMonthKeyWib = (): string => {
+  return new Date()
+    .toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" })
+    .slice(0, 7);
+};
+
+const toIsoDateOnly = (value?: string): string | null => {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return trimmed.slice(0, 10);
+  }
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+};
+
+const getMonthBounds = (monthKey: string): { start: string; end: string } => {
+  const [year, month] = monthKey.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  const mm = String(month).padStart(2, "0");
+  return {
+    start: `${year}-${mm}-01`,
+    end: `${year}-${mm}-${String(lastDay).padStart(2, "0")}`,
+  };
+};
+
+const overlapsMonth = (
+  mulai: string | undefined,
+  selesai: string | undefined,
+  monthKey: string,
+): boolean => {
+  const startIso = toIsoDateOnly(mulai);
+  const endIso = toIsoDateOnly(selesai) || startIso;
+  if (!startIso || !endIso) return false;
+  const { start, end } = getMonthBounds(monthKey);
+  return startIso <= end && endIso >= start;
+};
+
+const getEffectiveKuotaForMonth = (
+  kuotaDefault: number,
+  kuotaBulanan: IKuotaBulanan[] | undefined,
+  monthKey: string,
+): number => {
+  const override = kuotaBulanan?.find((k) => k.bulan === monthKey);
+  return override ? override.kuota : kuotaDefault;
+};
 
 export const getFormasi = async (req: Request, res: Response) => {
   try {
@@ -38,6 +88,7 @@ export const getFormasi = async (req: Request, res: Response) => {
       {
         $match: {
           "peserta.posisi": { $ne: "" },
+          "peserta.statusMagang": { $ne: "Tidak Magang" },
         },
       },
       {
@@ -69,7 +120,6 @@ export const getFormasi = async (req: Request, res: Response) => {
             },
           },
 
-          // 🔥 TAMBAHAN
           statusMagangList: {
             $push: "$peserta.statusMagang",
           },
@@ -85,34 +135,7 @@ export const getFormasi = async (req: Request, res: Response) => {
       },
     ]);
 
-    // ✅ AMBIL DATA LENGKAP PESERTA UNTUK SETIAP FORMASI
-    // Ini untuk mendapatkan tanggal mulai dan selesai magang
-    const semuaPendaftaran = await Pendaftaran.find({
-      status: "Disetujui",
-    }).populate("peserta.mentor", "name email");
-
-    // Buat map untuk menyimpan data peserta per formasi
-    const pesertaPerFormasi: Record<string, any[]> = {};
-
-    semuaPendaftaran.forEach((pendaftaran) => {
-      pendaftaran.peserta.forEach((p: any) => {
-        const posisi = p.posisi;
-        if (!posisi) return;
-
-        if (!pesertaPerFormasi[posisi]) {
-          pesertaPerFormasi[posisi] = [];
-        }
-
-        // Simpan data peserta dengan tanggal magang
-        pesertaPerFormasi[posisi].push({
-          nama: p.nama,
-          email: p.email,
-          tanggalMulai: p.tanggalMulaiMagang,
-          tanggalSelesai: p.tanggalSelesaiMagang,
-          statusMagang: p.statusMagang || "Menunggu",
-        });
-      });
-    });
+    const currentMonthKey = getCurrentMonthKeyWib();
 
     // Gabungkan data
     const result = formasi.map((item) => {
@@ -120,44 +143,46 @@ export const getFormasi = async (req: Request, res: Response) => {
 
       const jumlahPendaftar = found ? found.aktif : 0;
       const jumlahSelesaiMagang = found ? found.selesai : 0;
-      const sisaKuota = item.kuota - jumlahPendaftar;
+      const kuotaDefault = item.kuota ?? 0;
+      const kuotaBulanan: IKuotaBulanan[] = Array.isArray(item.kuotaBulanan)
+        ? [...item.kuotaBulanan]
+            .map((k: any) => ({ bulan: k.bulan, kuota: k.kuota }))
+            .sort((a, b) => a.bulan.localeCompare(b.bulan))
+        : [];
 
-      // Ambil data peserta untuk formasi ini
-      const daftarPeserta = pesertaPerFormasi[item.title] || [];
+      const kuotaBulanIni = getEffectiveKuotaForMonth(
+        kuotaDefault,
+        kuotaBulanan,
+        currentMonthKey,
+      );
 
-      // Cari tanggal mulai dan selesai terbaru (untuk keperluan internal)
-      let tanggalMulaiTerbaru = "";
-      let tanggalSelesaiTerbaru = "";
+      const mulaiList: string[] = found?.tanggalMulaiMagangList || [];
+      const selesaiList: string[] = found?.tanggalSelesaiMagangList || [];
+      const terisiBulanIni = mulaiList.reduce((acc, mulai, idx) => {
+        return overlapsMonth(mulai, selesaiList[idx], currentMonthKey)
+          ? acc + 1
+          : acc;
+      }, 0);
 
-      if (daftarPeserta.length > 0) {
-        // Urutkan berdasarkan tanggal mulai (descending) untuk mendapatkan yang terbaru
-        const sorted = [...daftarPeserta].sort((a, b) => {
-          return (
-            new Date(b.tanggalMulai).getTime() -
-            new Date(a.tanggalMulai).getTime()
-          );
-        });
-
-        tanggalMulaiTerbaru = sorted[0]?.tanggalMulai || "";
-        tanggalSelesaiTerbaru = sorted[0]?.tanggalSelesai || "";
-      }
+      const sisaKuota = Math.max(0, kuotaBulanIni - terisiBulanIni);
 
       return {
         _id: item._id,
         title: item.title,
         divisi: item.title,
-        kuota: item.kuota,
-        jurusan: [],
-        kode: item.title.toUpperCase().replace(/\s/g, "-"),
+        kuota: kuotaBulanIni,
+        kuotaDefault,
+        kuotaBulanan,
+        jurusan: Array.isArray(item.jurusan) ? item.jurusan : [],
+        kode: item.kode || item.title.toUpperCase().replace(/\s/g, "-"),
 
         jumlahPendaftar,
         jumlahSelesaiMagang,
-        sisaKuota: sisaKuota < 0 ? 0 : sisaKuota,
+        sisaKuota,
 
-        // 🔥 DATA TAMBAHAN (tidak perlu ditampilkan)
         statusMagang: found?.statusMagangList || [],
-        tanggalMulaiMagang: found?.tanggalMulaiMagangList || [],
-        tanggalSelesaiMagang: found?.tanggalSelesaiMagangList || [],
+        tanggalMulaiMagang: mulaiList,
+        tanggalSelesaiMagang: selesaiList,
       };
     });
 
@@ -166,6 +191,173 @@ export const getFormasi = async (req: Request, res: Response) => {
     console.error(error);
     res.status(500).json({
       message: "Gagal mengambil data formasi",
+    });
+  }
+};
+
+export const updateKuotaFormasi = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { kuota, kuotaBulanan } = req.body;
+
+    const updateFields: Record<string, any> = {};
+
+    if (kuota !== undefined) {
+      const parsedKuota = Number(kuota);
+      if (!Number.isInteger(parsedKuota) || parsedKuota < 0) {
+        return res.status(400).json({
+          message: "Kuota standar harus berupa bilangan bulat >= 0",
+        });
+      }
+      updateFields.kuota = parsedKuota;
+    }
+
+    if (kuotaBulanan !== undefined) {
+      if (!Array.isArray(kuotaBulanan)) {
+        return res.status(400).json({
+          message: "kuotaBulanan harus berupa array",
+        });
+      }
+
+      const normalizedMap = new Map<string, number>();
+      for (const entry of kuotaBulanan) {
+        const bulan = String(entry?.bulan || "").trim();
+        const nilai = Number(entry?.kuota);
+        if (!MONTH_KEY_REGEX.test(bulan)) {
+          return res.status(400).json({
+            message: `Format bulan "${bulan}" tidak valid (gunakan YYYY-MM)`,
+          });
+        }
+        if (!Number.isInteger(nilai) || nilai < 0) {
+          return res.status(400).json({
+            message: `Kuota untuk bulan ${bulan} harus berupa bilangan bulat >= 0`,
+          });
+        }
+        normalizedMap.set(bulan, nilai);
+      }
+
+      updateFields.kuotaBulanan = Array.from(normalizedMap.entries())
+        .map(([bulan, nilai]) => ({ bulan, kuota: nilai }))
+        .sort((a, b) => a.bulan.localeCompare(b.bulan));
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({
+        message: "Tidak ada data kuota yang diperbarui",
+      });
+    }
+
+    // Gunakan findByIdAndUpdate pada field kuota saja agar aman untuk dokumen lama tanpa field kode
+    const updated = await Formasi.findByIdAndUpdate(
+      id,
+      { $set: updateFields },
+      { new: true },
+    );
+
+    if (!updated) {
+      return res.status(404).json({
+        message: "Formasi tidak ditemukan",
+      });
+    }
+
+    res.json({
+      message: "Kuota formasi berhasil diperbarui",
+      data: updated,
+    });
+  } catch (error) {
+    console.error("[UPDATE KUOTA FORMASI ERROR]", error);
+    res.status(500).json({
+      message: "Gagal memperbarui kuota formasi",
+    });
+  }
+};
+
+export const upsertKuotaBulanan = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { bulan, kuota } = req.body;
+
+    const bulanStr = String(bulan || "").trim();
+    const parsedKuota = Number(kuota);
+
+    if (!MONTH_KEY_REGEX.test(bulanStr)) {
+      return res.status(400).json({
+        message: "Format bulan tidak valid (gunakan YYYY-MM, contoh: 2026-11)",
+      });
+    }
+
+    if (!Number.isInteger(parsedKuota) || parsedKuota < 0) {
+      return res.status(400).json({
+        message: "Kuota bulanan harus berupa bilangan bulat >= 0",
+      });
+    }
+
+    const existing = await Formasi.findById(id).lean<any>();
+    if (!existing) {
+      return res.status(404).json({
+        message: "Formasi tidak ditemukan",
+      });
+    }
+
+    const currentOverrides: IKuotaBulanan[] = Array.isArray(
+      existing.kuotaBulanan,
+    )
+      ? existing.kuotaBulanan
+      : [];
+
+    const filtered = currentOverrides.filter((k) => k.bulan !== bulanStr);
+    filtered.push({ bulan: bulanStr, kuota: parsedKuota });
+    filtered.sort((a, b) => a.bulan.localeCompare(b.bulan));
+
+    const updated = await Formasi.findByIdAndUpdate(
+      id,
+      { $set: { kuotaBulanan: filtered } },
+      { new: true },
+    );
+
+    res.json({
+      message: `Kuota khusus bulan ${bulanStr} berhasil disimpan`,
+      data: updated,
+    });
+  } catch (error) {
+    console.error("[UPSERT KUOTA BULANAN ERROR]", error);
+    res.status(500).json({
+      message: "Gagal menyimpan kuota bulanan",
+    });
+  }
+};
+
+export const deleteKuotaBulanan = async (req: Request, res: Response) => {
+  try {
+    const { id, bulan } = req.params;
+    const bulanStr = String(bulan || "").trim();
+
+    if (!MONTH_KEY_REGEX.test(bulanStr)) {
+      return res.status(400).json({
+        message: "Format bulan tidak valid",
+      });
+    }
+
+    const updated = await Formasi.findByIdAndUpdate(
+      id,
+      { $pull: { kuotaBulanan: { bulan: bulanStr } } },
+      { new: true },
+    );
+
+    if (!updated) {
+      return res.status(404).json({
+        message: "Formasi tidak ditemukan",
+      });
+    }
+
+    res.json({
+      message: `Penyesuaian kuota bulan ${bulanStr} berhasil dihapus (kembali ke kuota standar)`,
+      data: updated,
+    });
+  } catch (error) {
+    console.error("[DELETE KUOTA BULANAN ERROR]", error);
+    res.status(500).json({
+      message: "Gagal menghapus kuota bulanan",
     });
   }
 };
