@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
 import Logbook from "../models/Logbook";
+import Absensi from "../models/Absensi";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User"; // ✅ TAMBAH IMPORT INI
 import mongoose from "mongoose"; // ✅ TAMBAHKAN IMPORT INI
@@ -79,6 +82,39 @@ export const createLogbook = async (req: any, res: Response) => {
       // Jika sudah ada dan bukan revisi
       return res.status(400).json({
         message: "Logbook untuk tanggal ini sudah diisi",
+      });
+    }
+
+    // 🔒 WAJIB SUDAH CHECK-IN ABSENSI (ATAU IZIN KHUSUS STATUS TIDAK HADIR KETERANGAN)
+    const absenOnDate = await Absensi.findOne({
+      user: userId,
+      date: req.body.date,
+    });
+
+    const isCheckedIn = Boolean(absenOnDate?.checkIn);
+    const isIzinAllowance =
+      absenOnDate?.attendanceMode === "izin" &&
+      req.body.status === "tidak_hadir_keterangan";
+
+    if (!isCheckedIn && !isIzinAllowance) {
+      const removeTempFile = (relPath?: string) => {
+        if (!relPath) return;
+        try {
+          const fullPath = path.join(process.cwd(), relPath);
+          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        } catch {
+          // ignore cleanup error
+        }
+      };
+
+      images.forEach((imgPath) => removeTempFile(imgPath));
+      removeTempFile(pdfFilePath);
+
+      return res.status(403).json({
+        message:
+          absenOnDate?.attendanceMode === "izin"
+            ? "Anda tercatat Izin pada absensi tanggal ini. Hanya status Izin / Sakit (Dengan Keterangan) yang dapat diisi."
+            : "Anda harus melakukan Absen Pagi (Check-In) terlebih dahulu sebelum mengisi logbook hari ini.",
       });
     }
 

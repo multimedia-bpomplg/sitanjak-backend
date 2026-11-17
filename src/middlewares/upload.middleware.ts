@@ -117,6 +117,26 @@ export const uploadSuratSelesaiMagang = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
+/* ================= STORAGE SERTIFIKAT MAGANG ================= */
+const storageSertifikat = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/sertifikat";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const filename = `sertifikat-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+export const uploadSertifikatMagang = multer({
+  storage: storageSertifikat,
+  fileFilter: pdfFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
+
 /* ================== EXPORT ================== */
 export const uploadSuratPengantar = multer({
   storage: storagePengantar,
@@ -174,4 +194,32 @@ export const uploadBanner = multer({
   storage: storageBanner,
   fileFilter: imagePdfFilter,
   limits: { fileSize: 3 * 1024 * 1024 },
+});
+
+/* ================= STORAGE ABSENSI (FOTO WAJAH) ================= */
+const storageAbsensi = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/absensi";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".jpg";
+    const filename = `absen-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+const imageOnlyFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Hanya file gambar yang diperbolehkan untuk foto absensi"));
+  }
+};
+
+export const uploadAbsensi = multer({
+  storage: storageAbsensi,
+  fileFilter: imageOnlyFilter,
+  limits: { fileSize: 150 * 1024 }, // Maksimal ~100KB (+ toleransi header/encoding)
 });

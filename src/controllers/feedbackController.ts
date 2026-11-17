@@ -1,6 +1,7 @@
 // controllers/feedbackController.ts
 import { Response } from "express";
 import Feedback from "../models/Feedback";
+import LaporanAkhir from "../models/LaporanAkhir";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 
@@ -8,6 +9,15 @@ import User from "../models/User";
 export const createFeedback = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
+
+    // Wajib Laporan Akhir sudah disetujui sebelum mengisi Survei & Feedback
+    const laporan = await LaporanAkhir.findOne({ user: userId });
+    if (!laporan || laporan.status !== "Disetujui") {
+      return res.status(403).json({
+        message:
+          "Survei dan feedback hanya dapat diisi setelah Laporan Akhir Anda disetujui oleh Mentor.",
+      });
+    }
 
     // ================= VALIDASI SURVEY =================
     const {

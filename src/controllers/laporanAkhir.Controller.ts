@@ -8,6 +8,56 @@ import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import { uploadLaporanAkhir } from "../middlewares/upload.middleware";
 
+/* ================= DATE HELPERS (WIB) ================= */
+function getNowWIB(): Date {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }),
+  );
+}
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateIso(raw?: string): string | null {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  return toIsoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
+function shiftIsoDate(dateIso: string, deltaDays: number): string {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  return toIsoDate(new Date(y, m - 1, d + deltaDays));
+}
+
+function formatIsoToIndo(dateIso: string): string {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function cleanupUploadedFiles(files: Array<{ path?: string } | undefined>) {
+  for (const f of files) {
+    if (!f?.path) continue;
+    try {
+      if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+    } catch {
+      // ignore cleanup error
+    }
+  }
+}
+
 /* ================= GET LAPORAN AKHIR (PESERTA) ================= */
 export const getLaporanAkhir = async (req: any, res: Response) => {
   try {
@@ -30,34 +80,74 @@ export const getLaporanAkhir = async (req: any, res: Response) => {
 
 /* ================= UPLOAD LAPORAN AKHIR PDF ================= */
 export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
+  const file = req.files?.file?.[0];
+  const lampiran1 = req.files?.lampiran1?.[0];
+  const lampiran2 = req.files?.lampiran2?.[0];
+
   try {
     const userId = req.user.id;
+    const email = (req.user.email || "").toLowerCase();
 
     const exists = await LaporanAkhir.findOne({ user: userId });
 
     if (exists) {
+      cleanupUploadedFiles([file, lampiran1, lampiran2]);
       return res.status(400).json({
         message: "Laporan akhir sudah dikirim",
       });
     }
 
-    const file = req.files?.file?.[0];
-    const lampiran1 = req.files?.lampiran1?.[0];
-    const lampiran2 = req.files?.lampiran2?.[0];
+    // Validasi H-10 sebelum magang selesai
+    const emailRegex = email ? new RegExp(`^${escapeRegex(email)}$`, "i") : null;
+    const pendaftaran = await Pendaftaran.findOne({
+      status: "Disetujui",
+      $or: [
+        { "peserta.user": userId },
+        ...(emailRegex ? [{ "peserta.email": emailRegex }] : []),
+      ],
+    }).sort({ createdAt: -1 });
+
+    const peserta = pendaftaran?.peserta.find(
+      (p: any) =>
+        p.user?.toString() === userId ||
+        (email && p.email?.toLowerCase() === email),
+    );
+
+    if (peserta?.statusMagang === "Tidak Magang") {
+      cleanupUploadedFiles([file, lampiran1, lampiran2]);
+      return res.status(403).json({
+        message: "Status magang Anda tidak aktif.",
+      });
+    }
+
+    const endIso = parseDateIso(peserta?.tanggalSelesaiMagang);
+    if (endIso) {
+      const todayIso = toIsoDate(getNowWIB());
+      const openUploadIso = shiftIsoDate(endIso, -10);
+      if (todayIso < openUploadIso) {
+        cleanupUploadedFiles([file, lampiran1, lampiran2]);
+        return res.status(403).json({
+          message: `Unggah Laporan Akhir hanya dibuka mulai H-10 sebelum magang selesai (${formatIsoToIndo(openUploadIso)}).`,
+        });
+      }
+    }
 
     if (!file) {
+      cleanupUploadedFiles([lampiran1, lampiran2]);
       return res.status(400).json({
         message: "File laporan wajib diupload",
       });
     }
 
     if (lampiran1 && lampiran1.size > 2 * 1024 * 1024) {
+      cleanupUploadedFiles([file, lampiran1, lampiran2]);
       return res.status(400).json({
         message: "Lampiran 1 maksimal 2MB",
       });
     }
 
     if (lampiran2 && lampiran2.size > 2 * 1024 * 1024) {
+      cleanupUploadedFiles([file, lampiran1, lampiran2]);
       return res.status(400).json({
         message: "Lampiran 2 maksimal 2MB",
       });

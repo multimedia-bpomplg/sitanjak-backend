@@ -6,11 +6,13 @@ import {
   uploadSuratSelesaiMagang as uploadSuratSelesaiController,
   getSuratSelesaiMagangByEmail,
   getAllSuratSelesaiMagang,
+  downloadSuratSelesaiMagang,
 } from "../controllers/suratSelesaiMagangController";
 
 const router = Router();
 
 router.get("/cek", authMiddleware, getSuratSelesaiMagangByEmail);
+router.get("/download", authMiddleware, downloadSuratSelesaiMagang);
 
 router.get(
   "/all",

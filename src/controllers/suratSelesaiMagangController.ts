@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import SuratSelesaiMagang from "../models/SuratSelesaiMagang";
+import LaporanAkhir from "../models/LaporanAkhir";
+import Feedback from "../models/Feedback";
 import Pendaftaran from "../models/pendaftaran";
 import path from "path";
 import fs from "fs";
@@ -113,6 +115,71 @@ export const getAllSuratSelesaiMagang = async (req: Request, res: Response) => {
     console.error("[GET ALL SURAT SELESAI]", error);
     res.status(500).json({
       message: "Gagal mengambil semua data surat",
+    });
+  }
+};
+
+/* ================= DOWNLOAD SURAT SELESAI MAGANG (TERPROTEKSI) ================= */
+export const downloadSuratSelesaiMagang = async (req: any, res: Response) => {
+  try {
+    const userId = req.user.id;
+    const roles: string[] = req.user.roles || [];
+    const isAdminOrSuper =
+      roles.includes("admin") || roles.includes("superadmin");
+
+    const targetEmail =
+      isAdminOrSuper && req.query.email
+        ? String(req.query.email).trim()
+        : String(req.user.email || "").trim();
+
+    if (!targetEmail) {
+      return res.status(400).json({ message: "Email peserta tidak valid" });
+    }
+
+    if (!isAdminOrSuper) {
+      const [laporan, feedback] = await Promise.all([
+        LaporanAkhir.findOne({ user: userId }),
+        Feedback.findOne({ user: userId }),
+      ]);
+
+      if (!laporan || laporan.status !== "Disetujui" || !feedback) {
+        return res.status(403).json({
+          message:
+            "Surat Selesai Magang hanya dapat diunduh setelah Laporan Akhir disetujui dan Survei/Feedback selesai diisi.",
+        });
+      }
+    }
+
+    const escaped = targetEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const surat = await SuratSelesaiMagang.findOne({
+      email: new RegExp(`^${escaped}$`, "i"),
+    });
+
+    if (!surat || !surat.file) {
+      return res.status(404).json({
+        message: "Surat Selesai Magang belum tersedia",
+      });
+    }
+
+    const fullPath = path.join(process.cwd(), "uploads", surat.file);
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({
+        message: "File Surat Selesai Magang tidak ditemukan di server",
+      });
+    }
+
+    const mode = req.query.inline === "1" ? "inline" : "attachment";
+    const safeName = `Surat_Selesai_Magang_${(surat.nama || "Peserta").replace(/\s+/g, "_")}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `${mode}; filename="${safeName}"`);
+
+    const stream = fs.createReadStream(fullPath);
+    stream.pipe(res);
+  } catch (error: any) {
+    console.error("[DOWNLOAD SURAT SELESAI]", error);
+    res.status(500).json({
+      message: "Gagal mengunduh Surat Selesai Magang",
     });
   }
 };

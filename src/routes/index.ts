@@ -11,12 +11,14 @@ import userRoutes from "./userRoutes";
 import overviewRoutes from "./overview.routes";
 import formasiRoutes from "./formasiRoutes";
 import suratSelesaiMagangRoutes from "./suratSelesaiMagangRoutes";
+import sertifikatRoutes from "./sertifikatRoutes";
 import feedbackRoutes from "./FeedbackRoutes";
 import whatsappRoutes from "./whatsappRoutes";
 import announcementRoutes from "./announcementRoutes";
 import informasiFungsiRoutes from "./informasiFungsiRoutes";
 import maintenanceRoutes from "./maintenanceRoutes";
 import notificationRoutes from "./notificationRoutes";
+import absensiRoutes from "./absensi.routes";
 
 const router = Router();
 
@@ -38,11 +40,13 @@ router.use("/users", userRoutes);
 router.use("/oversistem", overviewRoutes);
 router.use("/formasi", formasiRoutes);
 router.use("/surat-selesai", suratSelesaiMagangRoutes);
+router.use("/sertifikat", sertifikatRoutes);
 router.use("/feedback", feedbackRoutes);
 router.use("/whatsapp", whatsappRoutes);
 router.use("/announcements", announcementRoutes);
 router.use("/informasi-fungsi", informasiFungsiRoutes);
 router.use("/maintenance", maintenanceRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/absensi", absensiRoutes);
 
 export default router;
