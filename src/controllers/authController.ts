@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Role from "../models/Role";
 import { verifyCaptcha } from "../utils/verifyCaptcha";
+import { resolveUserMagangMeta } from "../utils/pesertaKategori";
 
 /* ===================== HELPER ===================== */
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,6 +77,10 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const roleNames = user.roles.map((r: any) => r.name);
+    const { jurusan, kategoriMagang } = await resolveUserMagangMeta(
+      user,
+      roleNames,
+    );
 
     await delay(1000);
 
@@ -87,6 +92,8 @@ export const login = async (req: Request, res: Response) => {
         roles: roleNames,
         status: user.status,
         isSuperAccess: user.isSuperAccess || false,
+        jurusan,
+        kategoriMagang,
       },
       process.env.JWT_SECRET as string,
       { expiresIn: "1d" },
@@ -97,6 +104,8 @@ export const login = async (req: Request, res: Response) => {
       roles: roleNames,
       status: user.status,
       isSuperAccess: user.isSuperAccess || false,
+      jurusan,
+      kategoriMagang,
     });
   } catch (error) {
     console.error(error);

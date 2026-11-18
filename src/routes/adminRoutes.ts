@@ -16,6 +16,7 @@ import { getAdminDashboardSummary } from "../controllers/adminController";
 import {
   getMentor,
   buatMentor,
+  updateMentor,
   nonaktifkanMentor,
   aktifkanMentor,
 } from "../controllers/mentorController";
@@ -92,6 +93,13 @@ router.post(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   buatMentor,
+);
+
+router.put(
+  "/mentor/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  updateMentor,
 );
 
 router.patch(

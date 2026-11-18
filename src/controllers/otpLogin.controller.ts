@@ -5,6 +5,7 @@ import LoginAttempt from "../models/LoginAttempt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendOtpLoginEmail } from "../utils/otplogin";
+import { resolveUserMagangMeta } from "../utils/pesertaKategori";
 
 /* =====================================================
    UTILITIES
@@ -190,6 +191,10 @@ export const verifyOtpLogin = async (req: Request, res: Response) => {
     await otpRecord.save();
 
     const roleNames = user.roles.map((r: any) => r.name);
+    const { jurusan, kategoriMagang } = await resolveUserMagangMeta(
+      user,
+      roleNames,
+    );
 
     const token = jwt.sign(
       {
@@ -197,6 +202,8 @@ export const verifyOtpLogin = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         roles: roleNames,
+        jurusan,
+        kategoriMagang,
         loginMethod: "otp",
         deviceFingerprint,
       },
@@ -213,6 +220,8 @@ export const verifyOtpLogin = async (req: Request, res: Response) => {
     return res.json({
       token,
       roles: roleNames,
+      jurusan,
+      kategoriMagang,
       message: "Login berhasil",
     });
   } catch (error: any) {

@@ -15,6 +15,8 @@ import Whatsapp from "../models/Whatsapp";
 import { sendWhatsapp } from "../utils/sendWhatsapp";
 import { sendWhatsappGroup } from "../utils/whatsappClient";
 import { createNotification } from "../services/notificationService";
+import { resolveKategoriMagang } from "../utils/pesertaKategori";
+import { isMatchingMentorFormasi } from "../utils/formasiMentor";
 
 /* ================= TYPE UNTUK MULTER ================= */
 interface MulterRequest extends Request {
@@ -90,6 +92,7 @@ export const createPendaftaran = async (req: Request, res: Response) => {
         posisi: p.posisi,
 
         jurusan: p.jurusan, // ✅ PINDAHKAN KE SINI
+        kategoriMagang: resolveKategoriMagang(p.jurusan, p.kategoriMagang),
 
         asal: {
           jenis: p.asalJenis,
@@ -321,7 +324,13 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
       });
     }
 
-    return res.json(data);
+    const plain = data.toObject();
+    plain.peserta = (plain.peserta || []).map((p: any) => ({
+      ...p,
+      kategoriMagang: resolveKategoriMagang(p.jurusan, p.kategoriMagang),
+    }));
+
+    return res.json(plain);
   } catch (err: any) {
     console.error("[CEK PENDAFTARAN ERROR]", err);
     return res.status(500).json({
@@ -455,6 +464,10 @@ export const updateStatus = async (req: MulterRequest, res: Response) => {
                   roles: [rolePeserta._id],
                   status: "Aktif",
                   jurusan: peserta.jurusan || "",
+                  kategoriMagang: resolveKategoriMagang(
+                    peserta.jurusan,
+                    (peserta as any).kategoriMagang,
+                  ),
                 });
 
                 accountsCreated += 1;
@@ -612,6 +625,15 @@ export const setMentorPeserta = async (req: Request, res: Response) => {
       });
     }
 
+    if (
+      peserta.posisi &&
+      !isMatchingMentorFormasi(peserta.posisi, mentor.posisiMentor)
+    ) {
+      return res.status(400).json({
+        message: `Mentor yang dipilih harus sesuai dengan formasi peserta (${peserta.posisi})`,
+      });
+    }
+
     peserta.mentor = mentorId;
 
     await pendaftaran.save();
@@ -698,6 +720,10 @@ export const updatePendaftaranData = async (req: Request, res: Response) => {
 
       return {
         ...p,
+        kategoriMagang: resolveKategoriMagang(
+          p?.jurusan ?? existing?.jurusan,
+          p?.kategoriMagang ?? existing?.kategoriMagang,
+        ),
         mentor: mentorId || undefined,
         statusMagang,
       };

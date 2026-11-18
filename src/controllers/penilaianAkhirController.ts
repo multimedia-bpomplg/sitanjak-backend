@@ -377,10 +377,14 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
     const keteranganRataRata =
       rawKetRata || getPredikatFromNilai(nilaiRataRata);
 
-    const penilaiUser = await User.findById(currentUserId).select("name").lean();
+    const penilaiUser = await User.findById(currentUserId)
+      .select("name nip")
+      .lean();
     const penilaiNama = penilaiUser?.name || req.user?.name || "Pembimbing";
     const penilaiNip =
-      typeof req.body.penilaiNip === "string" ? req.body.penilaiNip.trim() : "";
+      typeof req.body.penilaiNip === "string" && req.body.penilaiNip.trim()
+        ? req.body.penilaiNip.trim()
+        : (penilaiUser as any)?.nip || "";
     const kesan = typeof req.body.kesan === "string" ? req.body.kesan.trim() : "";
     const saran = typeof req.body.saran === "string" ? req.body.saran.trim() : "";
 

@@ -7,7 +7,10 @@ export interface IUser extends Document {
   roles: Types.ObjectId[];
   status: "Aktif" | "Nonaktif";
   jurusan: string;
+  kategoriMagang?: "PKPA" | "Reguler";
   posisiMentor?: string;
+  nip?: string;
+  wa?: string;
   passwordChangedAt?: Date;
 
   // 🔥 TAMBAHAN
@@ -26,9 +29,22 @@ const userSchema: Schema = new Schema(
       default: "Aktif",
     },
     jurusan: { type: String, default: "" },
+    kategoriMagang: {
+      type: String,
+      enum: ["PKPA", "Reguler"],
+      default: "Reguler",
+    },
     posisiMentor: {
       type: String,
       required: false,
+    },
+    nip: {
+      type: String,
+      default: "",
+    },
+    wa: {
+      type: String,
+      default: "",
     },
 
     passwordChangedAt: {

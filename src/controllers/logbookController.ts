@@ -160,13 +160,31 @@ export const createLogbook = async (req: any, res: Response) => {
       isFinalized: false,
     });
 
-    // Notifikasi ke Mentor
+    // Notifikasi hanya ke Mentor pembimbing peserta terkait (jika sudah ditetapkan)
     setImmediate(async () => {
       try {
-        const sender = await User.findById(userId);
-        if (sender) {
-          createNotification({
-            recipientRoles: ["mentor"],
+        const sender = await User.findById(userId).select("name email").lean();
+        if (!sender?.email) return;
+
+        const escapedEmail = sender.email
+          .trim()
+          .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pendaftaran = await Pendaftaran.findOne({
+          "peserta.email": { $regex: new RegExp(`^${escapedEmail}$`, "i") },
+        })
+          .sort({ createdAt: -1 })
+          .select("peserta.email peserta.mentor")
+          .lean();
+
+        const matchedPeserta = pendaftaran?.peserta?.find(
+          (p: any) =>
+            p.email?.trim().toLowerCase() ===
+            sender.email.trim().toLowerCase(),
+        );
+
+        if (matchedPeserta?.mentor) {
+          await createNotification({
+            recipientId: matchedPeserta.mentor,
             title: "Logbook Baru Dikirim",
             message: `${sender.name || "Peserta"} telah mengisi logbook tanggal ${req.body.date}.`,
             type: "info",

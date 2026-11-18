@@ -4,6 +4,7 @@ import User from "../models/User";
 import { sendEmail } from "../utils/sendEmail";
 import { passwordChangedEmail } from "../utils/ALERTEmail";
 import Pendaftaran from "../models/pendaftaran";
+import { resolveKategoriMagang } from "../utils/pesertaKategori";
 
 /* ======================================================
    GET DATA PESERTA LOGIN (PROFILE PESERTA)
@@ -17,7 +18,7 @@ export const getPesertaMe = async (req: any, res: Response) => {
 
     // Ambil data user (tanpa password)
     const user = await User.findById(userId).select(
-      "name email roles posisiMagang",
+      "name email roles posisiMagang jurusan kategoriMagang",
     );
 
     // Ambil data pendaftaran + mentor (jika ada)
@@ -26,9 +27,19 @@ export const getPesertaMe = async (req: any, res: Response) => {
       "name email posisiMentor",
     );
 
+    const kategoriMagang = resolveKategoriMagang(
+      user?.jurusan,
+      user?.kategoriMagang,
+    );
+
     // Kirim response ke frontend
     res.json({
-      user,
+      user: user
+        ? {
+            ...user.toObject(),
+            kategoriMagang,
+          }
+        : null,
       pendaftaran,
     });
   } catch (err) {

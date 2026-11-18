@@ -11,6 +11,7 @@ import { roleMiddleware } from "../middlewares/role.middleware";
 import { uploadSuratBalasan } from "../middlewares/upload.middleware";
 import {
   getMentor,
+  updateMentor,
   nonaktifkanMentor,
   aktifkanMentor,
 } from "../controllers/mentorController";
@@ -103,6 +104,13 @@ router.post(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   buatMentor,
+);
+
+router.put(
+  "/mentor/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  updateMentor,
 );
 
 router.patch(

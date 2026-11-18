@@ -11,15 +11,17 @@ import LaporanAkhir from "../models/LaporanAkhir";
 import Feedback from "../models/Feedback";
 import Absensi from "../models/Absensi";
 import PenilaianAkhir from "../models/PenilaianAkhir";
+import { resolveKategoriMagang } from "../utils/pesertaKategori";
 
 /* ================= BUAT AKUN MENTOR + EMAIL ================= */
 export const buatMentor = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, posisiMentor } = req.body;
+    const { name, email, password, posisiMentor, nip, wa } = req.body;
 
-    if (!name || !email || !password || !posisiMentor) {
+    if (!name || !email || !password || !posisiMentor || !nip || !wa) {
       return res.status(400).json({
-        message: "Nama, email, password, dan posisi mentor wajib diisi",
+        message:
+          "Nama, email, NIP, nomor WhatsApp, password, dan posisi mentor wajib diisi",
       });
     }
 
@@ -36,12 +38,14 @@ export const buatMentor = async (req: Request, res: Response) => {
     const hashed = await bcrypt.hash(password, 10);
 
     const mentor = await User.create({
-      name,
-      email,
+      name: String(name).trim(),
+      email: String(email).trim().toLowerCase(),
       password: hashed,
       roles: [mentorRole._id],
       status: "Aktif",
       posisiMentor,
+      nip: String(nip).trim(),
+      wa: String(wa).trim(),
     });
 
     await sendEmail({
@@ -72,12 +76,79 @@ export const getMentor = async (_req: Request, res: Response) => {
     const role = await Role.findOne({ name: "mentor" });
 
     const data = await User.find({ roles: role?._id }).select(
-      "name email status posisiMentor",
+      "name email status posisiMentor nip wa",
     );
 
     res.json(data);
   } catch {
     res.status(500).json({ message: "Gagal memuat mentor" });
+  }
+};
+
+/* ================= UPDATE AKUN MENTOR ================= */
+export const updateMentor = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, email, nip, wa, posisiMentor, password } = req.body;
+
+    if (!name || !email || !posisiMentor || !nip || !wa) {
+      return res.status(400).json({
+        message:
+          "Nama, email, NIP, nomor WhatsApp, dan posisi mentor wajib diisi",
+      });
+    }
+
+    const mentor = await User.findById(id);
+    if (!mentor) {
+      return res.status(404).json({ message: "Akun mentor tidak ditemukan" });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const emailConflict = await User.findOne({
+      _id: { $ne: id },
+      email: { $regex: new RegExp(`^${escapedEmail}$`, "i") },
+    });
+
+    if (emailConflict) {
+      return res
+        .status(409)
+        .json({ message: "Email sudah digunakan oleh akun lain" });
+    }
+
+    mentor.name = String(name).trim();
+    mentor.email = normalizedEmail;
+    mentor.nip = String(nip).trim();
+    mentor.wa = String(wa).trim();
+    mentor.posisiMentor = String(posisiMentor).trim();
+
+    if (typeof password === "string" && password.trim().length > 0) {
+      if (password.trim().length < 8) {
+        return res.status(400).json({
+          message: "Password baru minimal 8 karakter",
+        });
+      }
+      mentor.password = await bcrypt.hash(password.trim(), 10);
+      mentor.passwordChangedAt = new Date();
+    }
+
+    await mentor.save();
+
+    return res.json({
+      message: "Akun mentor berhasil diperbarui",
+      mentor: {
+        _id: mentor._id,
+        name: mentor.name,
+        email: mentor.email,
+        nip: mentor.nip,
+        wa: mentor.wa,
+        posisiMentor: mentor.posisiMentor,
+        status: mentor.status,
+      },
+    });
+  } catch (err) {
+    console.error("[UPDATE MENTOR]", err);
+    return res.status(500).json({ message: "Gagal memperbarui akun mentor" });
   }
 };
 
@@ -149,6 +220,7 @@ const mapPesertaRecord = (ps: any, pendaftaran: any) => ({
   wa: ps.wa,
   posisi: ps.posisi,
   jurusan: ps.jurusan,
+  kategoriMagang: resolveKategoriMagang(ps.jurusan, ps.kategoriMagang),
   asal: ps.asal
     ? {
         jenis: ps.asal.jenis || "",

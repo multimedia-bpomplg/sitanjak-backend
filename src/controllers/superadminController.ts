@@ -6,6 +6,7 @@ import Pendaftaran from "../models/pendaftaran"; // ✅ INI YANG KURANG
 import { isStrongPassword } from "../utils/generatePassword";
 import { sendEmail } from "../utils/sendEmail";
 import { pesertaEmailTemplate } from "../utils/emailTemplate";
+import { resolveKategoriMagang } from "../utils/pesertaKategori";
 import jwt from "jsonwebtoken";
 
 /* ================= CREATE AKUN PESERTA + EMAIL ================= */
@@ -100,7 +101,7 @@ export const getPeserta = async (req: Request, res: Response) => {
     const users = await User.find({
       roles: rolePeserta._id,
     })
-      .select("name email status periode createdAt")
+      .select("name email status periode jurusan kategoriMagang createdAt")
       .sort({ createdAt: -1 });
 
     /* ================= PENDAFTARAN ================= */
@@ -111,18 +112,32 @@ export const getPeserta = async (req: Request, res: Response) => {
 
     const result = users.map((user) => {
       let statusMagang = "Menunggu";
+      let jurusan = user.jurusan || "";
+      let kategoriMagang = user.kategoriMagang;
 
       for (const daftar of pendaftaran) {
-        const peserta = daftar.peserta.find((p: any) => p.email === user.email);
+        const peserta = daftar.peserta.find(
+          (p: any) =>
+            p.email?.trim().toLowerCase() ===
+            user.email?.trim().toLowerCase(),
+        );
 
         if (peserta) {
           statusMagang = peserta.statusMagang || "Menunggu";
+          if (!jurusan && peserta.jurusan) {
+            jurusan = peserta.jurusan;
+          }
+          if (!kategoriMagang && (peserta as any).kategoriMagang) {
+            kategoriMagang = (peserta as any).kategoriMagang;
+          }
           break;
         }
       }
 
       return {
         ...user.toObject(),
+        jurusan,
+        kategoriMagang: resolveKategoriMagang(jurusan, kategoriMagang),
         statusMagang,
       };
     });

@@ -46,12 +46,19 @@ const getTodayWibBounds = () => {
   };
 };
 
-const buildRecipientFilter = (userObjId: Types.ObjectId, userRoles: string[]) => ({
-  $or: [
-    { recipientId: userObjId },
-    { recipientRoles: { $in: userRoles } },
-  ],
-});
+const buildRecipientFilter = (
+  userObjId: Types.ObjectId,
+  userRoles: string[],
+) => {
+  // Mentor hanya menerima notifikasi yang ditujukan spesifik ke ID akunnya (bukan broadcast role "mentor")
+  const roleTargets = userRoles.filter((r) => r !== "mentor");
+  if (roleTargets.length === 0) {
+    return { recipientId: userObjId };
+  }
+  return {
+    $or: [{ recipientId: userObjId }, { recipientRoles: { $in: roleTargets } }],
+  };
+};
 
 /**
  * Mengambil daftar notifikasi HARI INI (WIB) untuk user (berdasarkan ID spesifik atau role user)

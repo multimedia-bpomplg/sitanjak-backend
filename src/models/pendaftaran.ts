@@ -11,6 +11,7 @@ interface IPeserta {
   nama: string;
   posisi: string;
   jurusan: string;
+  kategoriMagang?: "PKPA" | "Reguler";
   asal: IAsal;
   mentor?: mongoose.Types.ObjectId;
   tanggalMulaiMagang: string;
@@ -56,6 +57,11 @@ const PesertaSchema = new Schema<IPeserta>(
     nama: String,
     posisi: String,
     jurusan: String,
+    kategoriMagang: {
+      type: String,
+      enum: ["PKPA", "Reguler"],
+      default: "Reguler",
+    },
     asal: {
       jenis: String,
       nama: String,
