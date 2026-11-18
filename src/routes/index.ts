@@ -20,6 +20,7 @@ import maintenanceRoutes from "./maintenanceRoutes";
 import notificationRoutes from "./notificationRoutes";
 import absensiRoutes from "./absensi.routes";
 import panduanRoutes from "./panduanRoutes";
+import penilaianAkhirRoutes from "./penilaianAkhir.routes";
 
 const router = Router();
 
@@ -50,5 +51,6 @@ router.use("/maintenance", maintenanceRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/absensi", absensiRoutes);
 router.use("/panduan", panduanRoutes);
+router.use("/penilaian-akhir", penilaianAkhirRoutes);
 
 export default router;

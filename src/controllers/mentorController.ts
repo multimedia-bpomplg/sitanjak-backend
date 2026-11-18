@@ -9,6 +9,8 @@ import Pendaftaran from "../models/pendaftaran";
 import Logbook from "../models/Logbook";
 import LaporanAkhir from "../models/LaporanAkhir";
 import Feedback from "../models/Feedback";
+import Absensi from "../models/Absensi";
+import PenilaianAkhir from "../models/PenilaianAkhir";
 
 /* ================= BUAT AKUN MENTOR + EMAIL ================= */
 export const buatMentor = async (req: Request, res: Response) => {
@@ -249,46 +251,80 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       ]),
     ).map((id) => new mongoose.Types.ObjectId(id));
 
-    const [logbookAgg, laporanList, feedbackList] = resolvedUserIds.length
-      ? await Promise.all([
-          Logbook.aggregate([
-            { $match: { user: { $in: resolvedUserIds } } },
-            {
-              $group: {
-                _id: "$user",
-                total: { $sum: 1 },
-                menunggu: {
-                  $sum: {
-                    $cond: [{ $eq: ["$approvalStatus", "menunggu"] }, 1, 0],
+    const todayIso = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Jakarta",
+    });
+    const emailLowerList = emailSet.map((e) => e.toLowerCase());
+
+    const [
+      logbookAgg,
+      laporanList,
+      feedbackList,
+      absensiList,
+      penilaianAkhirList,
+    ] =
+      resolvedUserIds.length || emailLowerList.length
+        ? await Promise.all([
+            resolvedUserIds.length
+              ? Logbook.aggregate([
+                  { $match: { user: { $in: resolvedUserIds } } },
+                  {
+                    $group: {
+                      _id: "$user",
+                      total: { $sum: 1 },
+                      menunggu: {
+                        $sum: {
+                          $cond: [{ $eq: ["$approvalStatus", "menunggu"] }, 1, 0],
+                        },
+                      },
+                      revisi: {
+                        $sum: {
+                          $cond: [{ $eq: ["$approvalStatus", "revisi"] }, 1, 0],
+                        },
+                      },
+                      disetujui: {
+                        $sum: {
+                          $cond: [{ $eq: ["$approvalStatus", "disetujui"] }, 1, 0],
+                        },
+                      },
+                      ditolak: {
+                        $sum: {
+                          $cond: [{ $eq: ["$approvalStatus", "ditolak"] }, 1, 0],
+                        },
+                      },
+                      latestLogbookDate: { $max: "$date" },
+                    },
                   },
-                },
-                revisi: {
-                  $sum: {
-                    $cond: [{ $eq: ["$approvalStatus", "revisi"] }, 1, 0],
-                  },
-                },
-                disetujui: {
-                  $sum: {
-                    $cond: [{ $eq: ["$approvalStatus", "disetujui"] }, 1, 0],
-                  },
-                },
-                ditolak: {
-                  $sum: {
-                    $cond: [{ $eq: ["$approvalStatus", "ditolak"] }, 1, 0],
-                  },
-                },
-                latestLogbookDate: { $max: "$date" },
-              },
-            },
-          ]),
-          LaporanAkhir.find({ user: { $in: resolvedUserIds } })
-            .select("user status fileName submittedAt approvedAt createdAt")
-            .lean(),
-          Feedback.find({ user: { $in: resolvedUserIds } })
-            .select("user month mentorResponse isFeedbackMentorSent status createdAt")
-            .lean(),
-        ])
-      : [[], [], []];
+                ])
+              : Promise.resolve([]),
+            resolvedUserIds.length
+              ? LaporanAkhir.find({ user: { $in: resolvedUserIds } })
+                  .select("user status fileName submittedAt approvedAt createdAt")
+                  .lean()
+              : Promise.resolve([]),
+            resolvedUserIds.length
+              ? Feedback.find({ user: { $in: resolvedUserIds } })
+                  .select("user month mentorResponse isFeedbackMentorSent status createdAt")
+                  .lean()
+              : Promise.resolve([]),
+            Absensi.find({
+              $or: [
+                ...(resolvedUserIds.length ? [{ user: { $in: resolvedUserIds } }] : []),
+                ...(emailLowerList.length ? [{ email: { $in: emailLowerList } }] : []),
+              ],
+            })
+              .select("user email date attendanceMode dailyScore checkIn.timeWIB checkOut.timeWIB")
+              .lean(),
+            PenilaianAkhir.find({
+              $or: [
+                ...(resolvedUserIds.length ? [{ user: { $in: resolvedUserIds } }] : []),
+                ...(emailLowerList.length ? [{ pesertaEmail: { $in: emailLowerList } }] : []),
+              ],
+            })
+              .select("user pesertaEmail nilaiRataRata keteranganRataRata tanggalPenilaian")
+              .lean(),
+          ])
+        : [[], [], [], [], []];
 
     const logbookMap = new Map<string, any>();
     logbookAgg.forEach((item: any) => {
@@ -324,13 +360,60 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       feedbackMap.set(uid, prev);
     });
 
-    const todayIso = new Date().toLocaleDateString("en-CA", {
-      timeZone: "Asia/Jakarta",
+    const absensiByKey = new Map<
+      string,
+      {
+        totalHari: number;
+        sumScore: number;
+        todayStatus: "masuk" | "wfh" | "izin" | "belum";
+        todayCheckInTimeWIB: string | null;
+        todayCheckOutTimeWIB: string | null;
+      }
+    >();
+    const updateAbsensiAcc = (key: string, rec: any) => {
+      if (!key) return;
+      const cur = absensiByKey.get(key) || {
+        totalHari: 0,
+        sumScore: 0,
+        todayStatus: "belum" as const,
+        todayCheckInTimeWIB: null,
+        todayCheckOutTimeWIB: null,
+      };
+      cur.totalHari += 1;
+      cur.sumScore += typeof rec.dailyScore === "number" ? rec.dailyScore : 0;
+      if (rec.date === todayIso) {
+        cur.todayStatus =
+          rec.attendanceMode === "izin"
+            ? "izin"
+            : rec.attendanceMode === "wfh"
+              ? "wfh"
+              : "masuk";
+        cur.todayCheckInTimeWIB = rec.checkIn?.timeWIB || null;
+        cur.todayCheckOutTimeWIB = rec.checkOut?.timeWIB || null;
+      }
+      absensiByKey.set(key, cur);
+    };
+    absensiList.forEach((rec: any) => {
+      if (rec.user) updateAbsensiAcc(rec.user.toString(), rec);
+      if (rec.email) updateAbsensiAcc(rec.email.toLowerCase(), rec);
+    });
+
+    const penilaianMap = new Map<string, any>();
+    penilaianAkhirList.forEach((pen: any) => {
+      const mapped = {
+        nilaiRataRata: pen.nilaiRataRata,
+        keteranganRataRata: pen.keteranganRataRata || "",
+        tanggalPenilaian: pen.tanggalPenilaian || null,
+      };
+      if (pen.user) penilaianMap.set(pen.user.toString(), mapped);
+      if (pen.pesertaEmail)
+        penilaianMap.set(pen.pesertaEmail.toLowerCase(), mapped);
     });
 
     const enrichedPeserta = pesertaRecords.map((p) => {
+      const emailLower = p.email ? p.email.toLowerCase() : "";
       const resolvedUserId =
-        p.userId || (p.email ? emailToUserId.get(p.email.toLowerCase()) || null : null);
+        p.userId || (emailLower ? emailToUserId.get(emailLower) || null : null);
       const logbookStats = (resolvedUserId && logbookMap.get(resolvedUserId)) || {
         total: 0,
         menunggu: 0,
@@ -344,6 +427,24 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         total: 0,
         belumDirespon: 0,
       };
+      const absRaw =
+        (resolvedUserId && absensiByKey.get(resolvedUserId)) ||
+        (emailLower && absensiByKey.get(emailLower)) ||
+        null;
+      const absensiStats = {
+        totalHari: absRaw?.totalHari || 0,
+        averageScore:
+          absRaw && absRaw.totalHari > 0
+            ? Math.round(absRaw.sumScore / absRaw.totalHari)
+            : null,
+        todayStatus: absRaw?.todayStatus || ("belum" as const),
+        todayCheckInTimeWIB: absRaw?.todayCheckInTimeWIB || null,
+        todayCheckOutTimeWIB: absRaw?.todayCheckOutTimeWIB || null,
+      };
+      const penilaianAkhir =
+        (resolvedUserId && penilaianMap.get(resolvedUserId)) ||
+        (emailLower && penilaianMap.get(emailLower)) ||
+        null;
       const phase = resolveInternshipPhase(p, todayIso);
 
       return {
@@ -353,12 +454,41 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         logbookStats,
         laporanAkhir,
         feedbackStats,
+        absensiStats,
+        penilaianAkhir,
       };
     });
 
+    const sedangMagangList = enrichedPeserta.filter(
+      (p) => p.phase === "sedang_magang",
+    );
+    const absensiHadirHariIni = sedangMagangList.filter(
+      (p) => p.absensiStats.todayStatus !== "belum",
+    ).length;
+    const absensiBelumHariIni = sedangMagangList.filter(
+      (p) => p.absensiStats.todayStatus === "belum",
+    ).length;
+    const dinilaiPeserta = enrichedPeserta.filter((p) =>
+      Boolean(p.penilaianAkhir),
+    );
+    const penilaianAkhirSudah = dinilaiPeserta.length;
+    const penilaianAkhirBelum =
+      enrichedPeserta.length - penilaianAkhirSudah;
+    const penilaianAkhirRataRata =
+      penilaianAkhirSudah > 0
+        ? Number(
+            (
+              dinilaiPeserta.reduce(
+                (acc, p) => acc + (Number(p.penilaianAkhir?.nilaiRataRata) || 0),
+                0,
+              ) / penilaianAkhirSudah
+            ).toFixed(2),
+          )
+        : null;
+
     const summary = {
       totalPeserta: enrichedPeserta.length,
-      sedangMagang: enrichedPeserta.filter((p) => p.phase === "sedang_magang").length,
+      sedangMagang: sedangMagangList.length,
       belumMulai: enrichedPeserta.filter((p) => p.phase === "belum_mulai").length,
       selesaiMagang: enrichedPeserta.filter((p) => p.phase === "selesai").length,
       pesertaDenganLogbookMenunggu: enrichedPeserta.filter(
@@ -397,6 +527,11 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         (acc, p) => acc + p.feedbackStats.belumDirespon,
         0,
       ),
+      absensiHadirHariIni,
+      absensiBelumHariIni,
+      penilaianAkhirSudah,
+      penilaianAkhirBelum,
+      penilaianAkhirRataRata,
     };
 
     res.json({
