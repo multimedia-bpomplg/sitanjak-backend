@@ -4,6 +4,7 @@ import path from "path";
 import Absensi from "../models/Absensi";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
+import Logbook from "../models/Logbook";
 
 /* ================= CONSTANTS ================= */
 
@@ -329,9 +330,14 @@ export const getTodayAbsensi = async (req: any, res: Response) => {
       date: todayIso,
     });
 
+    const hasLogbookToday = Boolean(
+      await Logbook.exists({ user: userId, date: todayIso }),
+    );
+
     return res.json({
       date: todayIso,
       absensi: record || null,
+      hasLogbookToday,
     });
   } catch (err) {
     console.error("[GET TODAY ABSENSI ERROR]", err);
@@ -652,6 +658,18 @@ export const submitCheckOut = async (req: any, res: Response) => {
       return res.status(400).json({
         message:
           "Anda belum melakukan Absen Pagi (Check-In) hari ini. Silakan Check-In terlebih dahulu.",
+      });
+    }
+
+    // 3b. Wajib sudah mengisi Logbook harian hari ini sebelum Check-Out
+    const hasLogbookToday = Boolean(
+      await Logbook.exists({ user: userId, date: todayIso }),
+    );
+    if (!hasLogbookToday) {
+      removeUploadedFile(newPhotoPath);
+      return res.status(403).json({
+        message:
+          "Anda wajib mengisi laporan kegiatan harian (logbook) hari ini terlebih dahulu sebelum melakukan Absen Pulang (Check-Out).",
       });
     }
 
