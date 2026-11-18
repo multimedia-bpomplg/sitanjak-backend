@@ -55,11 +55,15 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
     const userId = req.user.id;
     const email = (req.user.email || "").trim().toLowerCase();
 
-    let penilaian: any = await PenilaianAkhir.findOne({ user: userId }).lean();
+    let penilaian: any = await PenilaianAkhir.findOne({ user: userId })
+      .populate("mentor", "name nip")
+      .lean();
     if (!penilaian && email) {
       penilaian = await PenilaianAkhir.findOne({
         pesertaEmail: email,
-      }).lean();
+      })
+        .populate("mentor", "name nip")
+        .lean();
     }
 
     if (penilaian) {
@@ -73,6 +77,7 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
           ],
         })
           .sort({ createdAt: -1 })
+          .populate("peserta.mentor", "name email nip")
           .lean(),
         Absensi.find({
           $or: [
@@ -106,8 +111,21 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
         ((a1.nilai + a2Val + b1Val + b2Val + b3Val) / 5).toFixed(2),
       );
 
+      const resolvedPenilaiNama =
+        (penilaian as any).penilaiNama ||
+        (penilaian as any).mentor?.name ||
+        ps?.mentor?.name ||
+        "";
+      const resolvedPenilaiNip =
+        (penilaian as any).penilaiNip?.trim() ||
+        (penilaian as any).mentor?.nip ||
+        ps?.mentor?.nip ||
+        "";
+
       penilaian = {
         ...penilaian,
+        penilaiNama: resolvedPenilaiNama,
+        penilaiNip: resolvedPenilaiNip,
         kehadiranTaatJadwal: a1,
         nilaiRataRata,
         keteranganRataRata: getPredikatFromNilai(nilaiRataRata),
@@ -141,7 +159,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
     }
 
     const pendaftaranList = await Pendaftaran.find(pendaftaranFilter)
-      .populate("peserta.mentor", "name email posisiMentor")
+      .populate("peserta.mentor", "name email posisiMentor nip")
       .lean();
 
     type FlatPeserta = {
@@ -155,6 +173,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
       tanggalSelesaiMagang: string;
       statusMagang: string;
       mentorName: string;
+      mentorNip: string;
     };
 
     const flatList: FlatPeserta[] = [];
@@ -189,6 +208,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
           tanggalSelesaiMagang: ps.tanggalSelesaiMagang || "",
           statusMagang: ps.statusMagang || "Sedang Magang",
           mentorName: ps.mentor?.name || "-",
+          mentorNip: ps.mentor?.nip || "",
         });
       }
     }
@@ -322,6 +342,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
         );
         pen = {
           ...rawPen,
+          penilaiNip: rawPen.penilaiNip?.trim() || p.mentorNip || "",
           kehadiranTaatJadwal: a1,
           nilaiRataRata,
           keteranganRataRata: getPredikatFromNilai(nilaiRataRata),
@@ -339,6 +360,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
         tanggalSelesaiMagang: p.tanggalSelesaiMagang,
         statusMagang: p.statusMagang,
         mentorName: p.mentorName,
+        mentorNip: p.mentorNip,
         laporanStatus: uid ? laporanByUserId.get(uid) || null : null,
         absensiRef: absInfo,
         penilaianAkhir: pen,

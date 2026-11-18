@@ -316,7 +316,7 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
       "peserta.email": emailRegex,
     })
       .sort({ createdAt: -1 })
-      .populate("peserta.mentor", "name email posisiMentor");
+      .populate("peserta.mentor", "name email posisiMentor nip");
 
     if (!data) {
       return res.status(404).json({

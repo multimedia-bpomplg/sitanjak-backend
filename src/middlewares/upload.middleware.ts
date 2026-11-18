@@ -234,9 +234,14 @@ const storagePanduan = multer.diskStorage({
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname) || ".pdf";
     const rawTarget = String(req.params?.target || "").toLowerCase();
-    const safeTarget = ["peserta", "mentor", "admin", "pendaftaran"].includes(
-      rawTarget,
-    )
+    const safeTarget = [
+      "peserta",
+      "mentor",
+      "admin",
+      "pendaftaran",
+      "format-laporan-reguler",
+      "format-laporan-pkpa",
+    ].includes(rawTarget)
       ? rawTarget
       : "peserta";
     const filename = `panduan-${safeTarget}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;

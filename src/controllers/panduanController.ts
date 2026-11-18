@@ -9,6 +9,8 @@ const VALID_TARGETS: PanduanTarget[] = [
   "mentor",
   "admin",
   "pendaftaran",
+  "format-laporan-reguler",
+  "format-laporan-pkpa",
 ];
 
 const DEFAULT_TITLES: Record<PanduanTarget, string> = {
@@ -16,6 +18,8 @@ const DEFAULT_TITLES: Record<PanduanTarget, string> = {
   mentor: "Buku Panduan Mentor Pembimbing",
   admin: "Buku Panduan Administrator",
   pendaftaran: "Buku Panduan Pendaftaran Magang",
+  "format-laporan-reguler": "Format Laporan Akhir Magang (Reguler)",
+  "format-laporan-pkpa": "Format Laporan Akhir Magang (PKPA)",
 };
 
 function isValidTarget(value: string): value is PanduanTarget {
@@ -46,6 +50,8 @@ export const getAllPanduan = async (_req: Request, res: Response) => {
       mentor: null,
       admin: null,
       pendaftaran: null,
+      "format-laporan-reguler": null,
+      "format-laporan-pkpa": null,
     };
 
     for (const doc of docs as Array<{
@@ -136,7 +142,7 @@ export const uploadPanduanByTarget = async (
       return res.status(400).json({
         success: false,
         message:
-          "Target panduan harus 'peserta', 'mentor', 'admin', atau 'pendaftaran'",
+          "Target panduan harus 'peserta', 'mentor', 'admin', 'pendaftaran', 'format-laporan-reguler', atau 'format-laporan-pkpa'",
       });
     }
 
@@ -217,7 +223,7 @@ export const deletePanduanByTarget = async (
       return res.status(400).json({
         success: false,
         message:
-          "Target panduan harus 'peserta', 'mentor', 'admin', atau 'pendaftaran'",
+          "Target panduan harus 'peserta', 'mentor', 'admin', 'pendaftaran', 'format-laporan-reguler', atau 'format-laporan-pkpa'",
       });
     }
 

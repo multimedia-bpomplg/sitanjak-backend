@@ -1,6 +1,12 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
-export type PanduanTarget = "peserta" | "mentor" | "admin" | "pendaftaran";
+export type PanduanTarget =
+  | "peserta"
+  | "mentor"
+  | "admin"
+  | "pendaftaran"
+  | "format-laporan-reguler"
+  | "format-laporan-pkpa";
 
 export interface IPanduan extends Document {
   target: PanduanTarget;
@@ -17,7 +23,14 @@ const PanduanSchema = new Schema<IPanduan>(
   {
     target: {
       type: String,
-      enum: ["peserta", "mentor", "admin", "pendaftaran"],
+      enum: [
+        "peserta",
+        "mentor",
+        "admin",
+        "pendaftaran",
+        "format-laporan-reguler",
+        "format-laporan-pkpa",
+      ],
       required: true,
       unique: true,
       index: true,
