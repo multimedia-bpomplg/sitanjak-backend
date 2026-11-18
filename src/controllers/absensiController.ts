@@ -5,6 +5,10 @@ import Absensi from "../models/Absensi";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import Logbook from "../models/Logbook";
+import {
+  getHMinus3CutoffIso,
+  getFullInternshipWorkdaysUntilHMinus3,
+} from "../utils/absensiScoring";
 
 /* ================= CONSTANTS ================= */
 
@@ -392,6 +396,19 @@ export const getAbsensiSummary = async (req: any, res: Response) => {
         (email && p.email?.toLowerCase() === email),
     );
 
+    const { startIso: magangStartIso, cutoffEndIso: hMinus3Iso } =
+      getHMinus3CutoffIso(
+        peserta?.tanggalMulaiMagang,
+        peserta?.tanggalSelesaiMagang,
+      );
+    const expectedDates =
+      peserta && peserta.statusMagang !== "Tidak Magang"
+        ? getFullInternshipWorkdaysUntilHMinus3(
+            peserta.tanggalMulaiMagang,
+            peserta.tanggalSelesaiMagang,
+          )
+        : new Set<string>();
+
     const attendedDates = new Set<string>();
     let sumDaily = 0;
     let sumIn = 0;
@@ -400,7 +417,12 @@ export const getAbsensiSummary = async (req: any, res: Response) => {
     let countOut = 0;
 
     for (const r of records) {
-      if (r.date) attendedDates.add(r.date);
+      if (!r.date) continue;
+      if (magangStartIso && r.date < magangStartIso) continue;
+      if (hMinus3Iso && r.date > hMinus3Iso) continue;
+      if (expectedDates.size > 0 && !expectedDates.has(r.date)) continue;
+
+      attendedDates.add(r.date);
       if (r.attendanceMode === "izin") {
         sumDaily += 100;
         continue;
@@ -430,18 +452,13 @@ export const getAbsensiSummary = async (req: any, res: Response) => {
     }
 
     let missedDays = 0;
-    if (peserta && peserta.statusMagang !== "Tidak Magang") {
-      const startIso = parseDateIso(peserta.tanggalMulaiMagang);
-      const endIso = parseDateIso(peserta.tanggalSelesaiMagang);
-      const expectedDates = getExpectedWorkdays(startIso, endIso, cutoffEndIso);
-      for (const d of expectedDates) {
-        if (!attendedDates.has(d)) {
-          missedDays++;
-        }
+    for (const d of expectedDates) {
+      if (!attendedDates.has(d)) {
+        missedDays++;
       }
     }
 
-    const totalDays = records.length;
+    const totalDays = attendedDates.size;
     const effectiveTotalDays = totalDays + missedDays;
 
     return res.json({
@@ -1214,7 +1231,22 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
       }
 
       const acc = map.get(key)!;
-      if (rec.date) acc.attendedDates.add(rec.date);
+      const { startIso: psStartIso, cutoffEndIso: psHMinus3Iso } =
+        getHMinus3CutoffIso(acc.tanggalMulaiMagang, acc.tanggalSelesaiMagang);
+      const psExpectedWorkdays = getFullInternshipWorkdaysUntilHMinus3(
+        acc.tanggalMulaiMagang,
+        acc.tanggalSelesaiMagang,
+      );
+
+      // Abaikan absensi di luar periode magang atau setelah H-3 selesai magang
+      if (rec.date) {
+        if (psStartIso && rec.date < psStartIso) continue;
+        if (psHMinus3Iso && rec.date > psHMinus3Iso) continue;
+        if (psExpectedWorkdays.size > 0 && !psExpectedWorkdays.has(rec.date)) {
+          continue;
+        }
+        acc.attendedDates.add(rec.date);
+      }
       acc.totalHari += 1;
 
       if (rec.attendanceMode === "izin") {
@@ -1267,9 +1299,14 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
       .map((acc) => {
         let tidakAbsen = 0;
         if (acc.statusMagang !== "Tidak Magang") {
-          let startIso = parseDateIso(acc.tanggalMulaiMagang);
-          let endIso = parseDateIso(acc.tanggalSelesaiMagang);
-          let cutoffEndIso = defaultCutoffEndIso;
+          const { startIso: rawStartIso, cutoffEndIso: hMinus3Iso } =
+            getHMinus3CutoffIso(
+              acc.tanggalMulaiMagang,
+              acc.tanggalSelesaiMagang,
+            );
+          let startIso = rawStartIso;
+          let endIso = hMinus3Iso;
+          let cutoffEndIso = hMinus3Iso || defaultCutoffEndIso;
 
           if (filterDate) {
             if (!startIso || filterDate > startIso) startIso = filterDate;

@@ -5,6 +5,7 @@ import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import LaporanAkhir from "../models/LaporanAkhir";
 import Absensi from "../models/Absensi";
+import { calculateFinalAttendanceScore } from "../utils/absensiScoring";
 
 /* ================= HELPERS ================= */
 
@@ -54,11 +55,63 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
     const userId = req.user.id;
     const email = (req.user.email || "").trim().toLowerCase();
 
-    let penilaian = await PenilaianAkhir.findOne({ user: userId }).lean();
+    let penilaian: any = await PenilaianAkhir.findOne({ user: userId }).lean();
     if (!penilaian && email) {
       penilaian = await PenilaianAkhir.findOne({
         pesertaEmail: email,
       }).lean();
+    }
+
+    if (penilaian) {
+      const emailRegex = email ? new RegExp(`^${escapeRegex(email)}$`, "i") : null;
+      const [pendaftaran, absensiRecords] = await Promise.all([
+        Pendaftaran.findOne({
+          status: "Disetujui",
+          $or: [
+            { "peserta.user": userId },
+            ...(emailRegex ? [{ "peserta.email": emailRegex }] : []),
+          ],
+        })
+          .sort({ createdAt: -1 })
+          .lean(),
+        Absensi.find({
+          $or: [
+            { user: userId },
+            ...(emailRegex ? [{ email: emailRegex }] : []),
+          ],
+        }).lean(),
+      ]);
+
+      const ps = (pendaftaran as any)?.peserta?.find(
+        (p: any) =>
+          p.user?.toString() === String(userId) ||
+          (email && p.email?.trim().toLowerCase() === email),
+      );
+
+      const calc = calculateFinalAttendanceScore(
+        absensiRecords,
+        ps?.tanggalMulaiMagang,
+        ps?.tanggalSelesaiMagang,
+      );
+
+      const a1 = {
+        nilai: calc.averageScore,
+        keterangan: getPredikatFromNilai(calc.averageScore),
+      };
+      const a2Val = Number((penilaian as any).sikapKerja?.nilai ?? 0);
+      const b1Val = Number((penilaian as any).penguasaanMateri?.nilai ?? 0);
+      const b2Val = Number((penilaian as any).praktikKerja?.nilai ?? 0);
+      const b3Val = Number((penilaian as any).inisiatifKomunikasi?.nilai ?? 0);
+      const nilaiRataRata = Number(
+        ((a1.nilai + a2Val + b1Val + b2Val + b3Val) / 5).toFixed(2),
+      );
+
+      penilaian = {
+        ...penilaian,
+        kehadiranTaatJadwal: a1,
+        nilaiRataRata,
+        keteranganRataRata: getPredikatFromNilai(nilaiRataRata),
+      };
     }
 
     return res.json({
@@ -169,34 +222,33 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
       ),
     ).map((id) => new mongoose.Types.ObjectId(id));
 
-    const [penilaianList, laporanList, absensiAgg] = resolvedUserIds.length
+    const hasAnyTarget = resolvedUserIds.length > 0 || emails.length > 0;
+    const absensiMatchConditions: any[] = [];
+    if (resolvedUserIds.length > 0) {
+      absensiMatchConditions.push({ user: { $in: resolvedUserIds } });
+    }
+    if (emails.length > 0) {
+      absensiMatchConditions.push({ email: { $in: emails } });
+    }
+
+    const [penilaianList, laporanList, allAbsensiDocs] = hasAnyTarget
       ? await Promise.all([
           PenilaianAkhir.find({
             $or: [
-              { user: { $in: resolvedUserIds } },
-              { pesertaEmail: { $in: emails } },
+              ...(resolvedUserIds.length > 0
+                ? [{ user: { $in: resolvedUserIds } }]
+                : []),
+              ...(emails.length > 0
+                ? [{ pesertaEmail: { $in: emails } }]
+                : []),
             ],
           }).lean(),
-          LaporanAkhir.find({ user: { $in: resolvedUserIds } })
-            .select("user status")
-            .lean(),
-          Absensi.aggregate([
-            {
-              $match: {
-                $or: [
-                  { user: { $in: resolvedUserIds } },
-                  { email: { $in: emails } },
-                ],
-              },
-            },
-            {
-              $group: {
-                _id: "$email",
-                totalHari: { $sum: 1 },
-                avgDailyScore: { $avg: "$dailyScore" },
-              },
-            },
-          ]),
+          resolvedUserIds.length > 0
+            ? LaporanAkhir.find({ user: { $in: resolvedUserIds } })
+                .select("user status")
+                .lean()
+            : Promise.resolve([]),
+          Absensi.find({ $or: absensiMatchConditions }).lean(),
         ])
       : [[], [], []];
 
@@ -213,32 +265,68 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
       if (lap.user) laporanByUserId.set(lap.user.toString(), lap.status);
     }
 
-    const absensiByEmail = new Map<
-      string,
-      { totalHari: number; averageScore: number }
-    >();
-    for (const agg of absensiAgg as any[]) {
-      if (agg._id) {
-        absensiByEmail.set(String(agg._id).toLowerCase(), {
-          totalHari: agg.totalHari || 0,
-          averageScore:
-            typeof agg.avgDailyScore === "number"
-              ? Math.round(agg.avgDailyScore)
-              : 0,
-        });
+    const absensiDocsByEmail = new Map<string, any[]>();
+    const absensiDocsByUserId = new Map<string, any[]>();
+    for (const rec of allAbsensiDocs as any[]) {
+      const em = rec.email ? String(rec.email).trim().toLowerCase() : "";
+      const uid = rec.user ? rec.user.toString() : "";
+      if (em) {
+        const list = absensiDocsByEmail.get(em) || [];
+        list.push(rec);
+        absensiDocsByEmail.set(em, list);
+      }
+      if (uid) {
+        const list = absensiDocsByUserId.get(uid) || [];
+        list.push(rec);
+        absensiDocsByUserId.set(uid, list);
       }
     }
 
     const items = flatList.map((p) => {
       const uid = p.userId || emailToUserId.get(p.email) || null;
-      const pen =
+      const rawPen =
         (uid && penilaianByUserId.get(uid)) ||
         penilaianByEmail.get(p.email) ||
         null;
-      const absInfo = absensiByEmail.get(p.email) || {
-        totalHari: 0,
-        averageScore: null,
+
+      const byEmailRecords = absensiDocsByEmail.get(p.email) || [];
+      const byUidRecords = uid ? absensiDocsByUserId.get(uid) || [] : [];
+      const mergedRecords = [...byEmailRecords, ...byUidRecords];
+
+      const calc = calculateFinalAttendanceScore(
+        mergedRecords,
+        p.tanggalMulaiMagang,
+        p.tanggalSelesaiMagang,
+      );
+
+      const absInfo = {
+        totalHari: calc.totalHariHadir,
+        totalHariKerja: calc.totalHariKerja,
+        tidakAbsen: calc.tidakAbsen,
+        cutoffEndIso: calc.cutoffEndIso,
+        averageScore: calc.averageScore,
       };
+
+      let pen = rawPen;
+      if (rawPen) {
+        const a1 = {
+          nilai: calc.averageScore,
+          keterangan: getPredikatFromNilai(calc.averageScore),
+        };
+        const a2Val = Number(rawPen.sikapKerja?.nilai ?? 0);
+        const b1Val = Number(rawPen.penguasaanMateri?.nilai ?? 0);
+        const b2Val = Number(rawPen.praktikKerja?.nilai ?? 0);
+        const b3Val = Number(rawPen.inisiatifKomunikasi?.nilai ?? 0);
+        const nilaiRataRata = Number(
+          ((a1.nilai + a2Val + b1Val + b2Val + b3Val) / 5).toFixed(2),
+        );
+        pen = {
+          ...rawPen,
+          kehadiranTaatJadwal: a1,
+          nilaiRataRata,
+          keteranganRataRata: getPredikatFromNilai(nilaiRataRata),
+        };
+      }
 
       return {
         userId: uid,
@@ -322,32 +410,49 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
       "peserta.mentor": currentUserId,
     }).lean();
 
-    const isMentee = pendaftaranList.some((pend: any) =>
-      (pend.peserta || []).some((ps: any) => {
+    let matchedMentee: any = null;
+    for (const pend of pendaftaranList as any[]) {
+      for (const ps of pend.peserta || []) {
         const psMentorId = ps.mentor ? ps.mentor.toString() : "";
-        if (psMentorId !== currentUserId) return false;
+        if (psMentorId !== currentUserId) continue;
         const psUserId = ps.user ? ps.user.toString() : "";
         const psEmail = (ps.email || "").trim().toLowerCase();
-        return (
+        if (
           psUserId === pesertaUserId ||
           (Boolean(targetEmailRegex) && psEmail === targetEmailLower)
-        );
-      }),
-    );
+        ) {
+          matchedMentee = ps;
+          break;
+        }
+      }
+      if (matchedMentee) break;
+    }
 
-    if (!isMentee) {
+    if (!matchedMentee) {
       return res.status(403).json({
         message:
           "Anda tidak memiliki akses untuk menilai peserta yang bukan bimbingan Anda.",
       });
     }
 
-    // Validasi 5 komponen nilai
-    const a1 = parseAspectInput(
-      req.body.kehadiranTaatJadwal,
-      "1.A Kehadiran dan Taat Jadwal",
+    // 1.A Kehadiran dan Taat Jadwal dikunci otomatis dari total nilai absensi dibagi seluruh hari kerja magang sampai H-3
+    const absensiMatchOr: any[] = [
+      { user: new mongoose.Types.ObjectId(pesertaUserId) },
+    ];
+    if (targetEmailRegex) {
+      absensiMatchOr.push({ email: targetEmailRegex });
+    }
+    const absensiDocs = await Absensi.find({ $or: absensiMatchOr }).lean();
+    const attendanceCalc = calculateFinalAttendanceScore(
+      absensiDocs,
+      matchedMentee?.tanggalMulaiMagang,
+      matchedMentee?.tanggalSelesaiMagang,
     );
-    if ("error" in a1) return res.status(400).json({ message: a1.error });
+    const autoKehadiranNilai = attendanceCalc.averageScore;
+    const a1 = {
+      nilai: autoKehadiranNilai,
+      keterangan: getPredikatFromNilai(autoKehadiranNilai),
+    };
 
     const a2 = parseAspectInput(req.body.sikapKerja, "1.B Sikap Kerja");
     if ("error" in a2) return res.status(400).json({ message: a2.error });
