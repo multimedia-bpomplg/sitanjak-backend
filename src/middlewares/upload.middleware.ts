@@ -223,3 +223,29 @@ export const uploadAbsensi = multer({
   fileFilter: imageOnlyFilter,
   limits: { fileSize: 150 * 1024 }, // Maksimal ~100KB (+ toleransi header/encoding)
 });
+
+/* ================= STORAGE PANDUAN (PESERTA & MENTOR) ================= */
+const storagePanduan = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/panduan";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".pdf";
+    const rawTarget = String(req.params?.target || "").toLowerCase();
+    const safeTarget = ["peserta", "mentor", "admin", "pendaftaran"].includes(
+      rawTarget,
+    )
+      ? rawTarget
+      : "peserta";
+    const filename = `panduan-${safeTarget}-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+export const uploadPanduan = multer({
+  storage: storagePanduan,
+  fileFilter: pdfFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // Maksimal 10MB
+});
