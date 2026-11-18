@@ -297,7 +297,8 @@ export const getAllPendaftaran = async (_req: Request, res: Response) => {
   ========================= */
 export const cekPendaftaran = async (req: Request, res: Response) => {
   try {
-    const { email } = req.query;
+    const emailParam = req.query.email;
+    const email = typeof emailParam === "string" ? emailParam.trim() : "";
 
     if (!email) {
       return res.status(400).json({
@@ -305,9 +306,14 @@ export const cekPendaftaran = async (req: Request, res: Response) => {
       });
     }
 
+    const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const emailRegex = new RegExp(`^${escaped}$`, "i");
+
     const data = await Pendaftaran.findOne({
-      "peserta.email": email,
-    }).populate("peserta.mentor", "name email posisiMentor");
+      "peserta.email": emailRegex,
+    })
+      .sort({ createdAt: -1 })
+      .populate("peserta.mentor", "name email posisiMentor");
 
     if (!data) {
       return res.status(404).json({
