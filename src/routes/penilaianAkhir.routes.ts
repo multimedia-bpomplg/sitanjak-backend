@@ -20,11 +20,11 @@ router.get(
   getMentorPenilaianList,
 );
 
-// Mentor (serta Admin/Superadmin) mengisi atau memperbarui penilaian akhir peserta
+// Hanya Mentor yang dapat mengisi atau memperbarui penilaian akhir peserta bimbingannya
 router.put(
   "/mentor/:pesertaUserId",
   authMiddleware,
-  roleMiddleware(["mentor", "admin", "superadmin"]),
+  roleMiddleware(["mentor"]),
   upsertPenilaianAkhir,
 );
 

@@ -291,8 +291,13 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
     const { pesertaUserId } = req.params;
     const currentUserId = String(req.user.id);
     const roles = getRoleNames(req.user);
-    const isAdminOrSuperadmin =
-      roles.includes("admin") || roles.includes("superadmin");
+
+    if (!roles.includes("mentor")) {
+      return res.status(403).json({
+        message:
+          "Hanya Mentor pembimbing yang dapat mengisi atau mengubah nilai akhir magang.",
+      });
+    }
 
     if (!pesertaUserId || !mongoose.Types.ObjectId.isValid(pesertaUserId)) {
       return res.status(400).json({ message: "ID peserta tidak valid." });
@@ -308,35 +313,33 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
     const targetEmailLower = (targetUser.email || "").trim().toLowerCase();
 
     // Verifikasi apakah peserta benar bimbingan mentor yang login
-    if (!isAdminOrSuperadmin) {
-      const targetEmailRegex = targetEmailLower
-        ? new RegExp(`^${escapeRegex(targetEmailLower)}$`, "i")
-        : null;
+    const targetEmailRegex = targetEmailLower
+      ? new RegExp(`^${escapeRegex(targetEmailLower)}$`, "i")
+      : null;
 
-      const pendaftaranList = await Pendaftaran.find({
-        status: "Disetujui",
-        "peserta.mentor": currentUserId,
-      }).lean();
+    const pendaftaranList = await Pendaftaran.find({
+      status: "Disetujui",
+      "peserta.mentor": currentUserId,
+    }).lean();
 
-      const isMentee = pendaftaranList.some((pend: any) =>
-        (pend.peserta || []).some((ps: any) => {
-          const psMentorId = ps.mentor ? ps.mentor.toString() : "";
-          if (psMentorId !== currentUserId) return false;
-          const psUserId = ps.user ? ps.user.toString() : "";
-          const psEmail = (ps.email || "").trim().toLowerCase();
-          return (
-            psUserId === pesertaUserId ||
-            (Boolean(targetEmailRegex) && psEmail === targetEmailLower)
-          );
-        }),
-      );
+    const isMentee = pendaftaranList.some((pend: any) =>
+      (pend.peserta || []).some((ps: any) => {
+        const psMentorId = ps.mentor ? ps.mentor.toString() : "";
+        if (psMentorId !== currentUserId) return false;
+        const psUserId = ps.user ? ps.user.toString() : "";
+        const psEmail = (ps.email || "").trim().toLowerCase();
+        return (
+          psUserId === pesertaUserId ||
+          (Boolean(targetEmailRegex) && psEmail === targetEmailLower)
+        );
+      }),
+    );
 
-      if (!isMentee) {
-        return res.status(403).json({
-          message:
-            "Anda tidak memiliki akses untuk menilai peserta yang bukan bimbingan Anda.",
-        });
-      }
+    if (!isMentee) {
+      return res.status(403).json({
+        message:
+          "Anda tidak memiliki akses untuk menilai peserta yang bukan bimbingan Anda.",
+      });
     }
 
     // Validasi 5 komponen nilai
