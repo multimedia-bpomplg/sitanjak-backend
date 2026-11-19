@@ -1054,7 +1054,7 @@ export const getManageAbsensiList = async (req: any, res: Response) => {
           dailyScore,
           isAnyOutside,
           koreksiNote: rec.koreksiNote || "",
-          koreksiBy: rec.koreksiBy || null,
+          koreksiBy: rec.koreksiBy?.name ? rec.koreksiBy : null,
           koreksiAt: rec.koreksiAt || null,
         };
       })
