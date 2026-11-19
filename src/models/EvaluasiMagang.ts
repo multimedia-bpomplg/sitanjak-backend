@@ -43,6 +43,30 @@ const EvaluasiMagangSchema = new mongoose.Schema(
       tanggalSurat: { type: String, required: true, trim: true },
       ttdImage: { type: String, default: "" },
     },
+    status: {
+      type: String,
+      enum: ["Menunggu", "Revisi", "Disetujui"],
+      default: "Menunggu",
+    },
+    mentorNote: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    reviewedByName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
     submittedAt: {
       type: Date,
       default: Date.now,

@@ -508,10 +508,25 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
       .select("name nip")
       .lean();
     const penilaiNama = penilaiUser?.name || req.user?.name || "Pembimbing";
-    const penilaiNip =
-      typeof req.body.penilaiNip === "string" && req.body.penilaiNip.trim()
-        ? req.body.penilaiNip.trim()
-        : (penilaiUser as any)?.nip || "";
+    const penilaiNip = ((penilaiUser as any)?.nip || "").trim();
+    const penilaiTtdImage =
+      typeof req.body.penilaiTtdImage === "string"
+        ? req.body.penilaiTtdImage.trim()
+        : "";
+
+    if (penilaiTtdImage) {
+      if (!penilaiTtdImage.startsWith("data:image/png;base64,")) {
+        return res.status(400).json({
+          message: "Gambar tanda tangan (TTD) harus berformat PNG (.png).",
+        });
+      }
+      if (penilaiTtdImage.length > 3 * 1024 * 1024) {
+        return res.status(400).json({
+          message: "Ukuran file tanda tangan (TTD) maksimal 2 MB.",
+        });
+      }
+    }
+
     const kesan = typeof req.body.kesan === "string" ? req.body.kesan.trim() : "";
     const saran = typeof req.body.saran === "string" ? req.body.saran.trim() : "";
 
@@ -524,6 +539,7 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
           mentor: currentUserId,
           penilaiNama,
           penilaiNip,
+          penilaiTtdImage,
           kehadiranTaatJadwal: a1,
           sikapKerja: a2,
           penguasaanMateri: b1,

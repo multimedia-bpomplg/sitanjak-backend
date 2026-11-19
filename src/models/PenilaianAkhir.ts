@@ -11,6 +11,7 @@ export interface IPenilaianAkhir extends Document {
   mentor: mongoose.Types.ObjectId;
   penilaiNama: string;
   penilaiNip: string;
+  penilaiTtdImage: string;
   kehadiranTaatJadwal: IAspectScore;
   sikapKerja: IAspectScore;
   penguasaanMateri: IAspectScore;
@@ -62,6 +63,10 @@ const PenilaianAkhirSchema = new Schema<IPenilaianAkhir>(
       type: String,
       default: "",
       trim: true,
+    },
+    penilaiTtdImage: {
+      type: String,
+      default: "",
     },
     kehadiranTaatJadwal: { type: AspectScoreSchema, required: true },
     sikapKerja: { type: AspectScoreSchema, required: true },
