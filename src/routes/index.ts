@@ -22,6 +22,7 @@ import absensiRoutes from "./absensi.routes";
 import panduanRoutes from "./panduanRoutes";
 import penilaianAkhirRoutes from "./penilaianAkhir.routes";
 import evaluasiRoutes from "./evaluasiRoutes";
+import heroSettingRoutes from "./heroSettingRoutes";
 
 const router = Router();
 
@@ -54,5 +55,6 @@ router.use("/absensi", absensiRoutes);
 router.use("/panduan", panduanRoutes);
 router.use("/penilaian-akhir", penilaianAkhirRoutes);
 router.use("/evaluasi", evaluasiRoutes);
+router.use("/hero-setting", heroSettingRoutes);
 
 export default router;

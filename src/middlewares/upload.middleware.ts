@@ -254,3 +254,36 @@ export const uploadPanduan = multer({
   fileFilter: pdfFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // Maksimal 10MB
 });
+
+/* ================= STORAGE HERO LANDING IMAGE ================= */
+const storageHeroImage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/hero";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".png";
+    const filename = `hero-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+const heroImageFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        "Hanya file gambar berformat PNG, JPG, atau WebP yang diperbolehkan",
+      ),
+    );
+  }
+};
+
+export const uploadHeroImage = multer({
+  storage: storageHeroImage,
+  fileFilter: heroImageFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Maksimal 5MB
+});
