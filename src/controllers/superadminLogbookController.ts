@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Logbook from "../models/Logbook";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
+import { createNotification } from "../services/notificationService";
 
 /* ================= GET ALL LOGBOOK (SUPERADMIN & ADMIN) ================= */
 export const getAllLogbook = async (req: any, res: Response) => {
@@ -39,6 +40,34 @@ export const superadminApproveLogbook = async (req: any, res: Response) => {
     logbook.approvedBy = superadminId;
 
     await logbook.save();
+
+    if ((logbook.user as any)?._id) {
+      const statusTitle =
+        approvalStatus === "disetujui"
+          ? "Laporan Harian Disetujui"
+          : approvalStatus === "revisi"
+            ? "Revisi Logbook Diminta"
+            : "Laporan Harian Ditolak";
+      const statusMsg =
+        approvalStatus === "disetujui"
+          ? `Laporan harian Anda untuk tanggal ${logbook.date} telah disetujui.`
+          : approvalStatus === "revisi"
+            ? `Admin meminta revisi logbook tanggal ${logbook.date}${mentorNote ? `: "${mentorNote}"` : "."}`
+            : `Laporan harian Anda untuk tanggal ${logbook.date} ditolak.`;
+
+      createNotification({
+        recipientId: (logbook.user as any)._id,
+        title: statusTitle,
+        message: statusMsg,
+        type:
+          approvalStatus === "disetujui"
+            ? "success"
+            : approvalStatus === "revisi"
+              ? "warning"
+              : "alert",
+        linkUrl: "/dashboard/peserta/isi-logbook",
+      });
+    }
 
     const message =
       approvalStatus === "disetujui"

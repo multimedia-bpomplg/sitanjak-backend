@@ -23,6 +23,7 @@ import panduanRoutes from "./panduanRoutes";
 import penilaianAkhirRoutes from "./penilaianAkhir.routes";
 import evaluasiRoutes from "./evaluasiRoutes";
 import heroSettingRoutes from "./heroSettingRoutes";
+import holidayRoutes from "./holidayRoutes";
 
 const router = Router();
 
@@ -56,5 +57,6 @@ router.use("/panduan", panduanRoutes);
 router.use("/penilaian-akhir", penilaianAkhirRoutes);
 router.use("/evaluasi", evaluasiRoutes);
 router.use("/hero-setting", heroSettingRoutes);
+router.use("/holidays", holidayRoutes);
 
 export default router;

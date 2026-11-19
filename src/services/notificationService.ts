@@ -1,5 +1,6 @@
 import Notification from "../models/Notification";
 import { Types } from "mongoose";
+import { sendPushToUser } from "./pushNotificationService";
 
 export interface CreateNotificationDTO {
   recipientId?: string | Types.ObjectId;
@@ -24,6 +25,18 @@ export const createNotification = async (dto: CreateNotificationDTO) => {
       linkUrl: dto.linkUrl || "",
       readBy: [],
     });
+
+    // Kirim Web Push ke perangkat user secara non-blocking jika ditujukan ke user spesifik
+    if (dto.recipientId) {
+      void sendPushToUser(dto.recipientId, {
+        title: dto.title,
+        body: dto.message,
+        url: dto.linkUrl || "/dashboard/peserta",
+        tag: `notif-${notif._id.toString()}`,
+      }).catch((err) => {
+        console.warn("⚠️ [NotificationService] Gagal kirim push:", err);
+      });
+    }
 
     // Bersihkan notifikasi lama (> 7 hari) secara asynchronous agar database tidak menumpuk berbulan-bulan
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

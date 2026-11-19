@@ -5,6 +5,8 @@ import SertifikatMagang from "../models/SertifikatMagang";
 import LaporanAkhir from "../models/LaporanAkhir";
 import Feedback from "../models/Feedback";
 import Pendaftaran from "../models/pendaftaran";
+import User from "../models/User";
+import { createNotification } from "../services/notificationService";
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -81,6 +83,28 @@ export const uploadSertifikatMagangController = async (
 
     if (prevFile && prevFile !== newRelativeFile) {
       removeFileIfExists(prevFile);
+    }
+
+    let recipientUserId = (peserta as any)?.user;
+    if (!recipientUserId) {
+      const userDoc = await User.findOne({ email: emailRegex })
+        .select("_id")
+        .lean();
+      recipientUserId = userDoc?._id;
+    }
+
+    if (recipientUserId) {
+      createNotification({
+        recipientId: recipientUserId,
+        title: existing
+          ? "Sertifikat Magang Diperbarui"
+          : "Sertifikat Magang Tersedia",
+        message: existing
+          ? "Sertifikat magang Anda telah diperbarui oleh Admin."
+          : "Sertifikat magang Anda telah diunggah oleh Admin dan siap diunduh.",
+        type: "success",
+        linkUrl: "/dashboard/peserta/ganti-password",
+      });
     }
 
     return res.status(existing ? 200 : 201).json({

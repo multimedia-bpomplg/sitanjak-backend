@@ -6,6 +6,7 @@ import User from "../models/User";
 import LaporanAkhir from "../models/LaporanAkhir";
 import Absensi from "../models/Absensi";
 import { calculateFinalAttendanceScore } from "../utils/absensiScoring";
+import { createNotification } from "../services/notificationService";
 
 /* ================= HELPERS ================= */
 
@@ -554,6 +555,14 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
       },
       { upsert: true, new: true },
     );
+
+    createNotification({
+      recipientId: pesertaUserId,
+      title: "Nilai Akhir Magang Tersedia",
+      message: `Mentor telah mengisi nilai akhir magang Anda (Nilai rata-rata: ${nilaiRataRata} - ${keteranganRataRata}).`,
+      type: "success",
+      linkUrl: "/dashboard/peserta/penilaian-akhir",
+    });
 
     return res.json({
       success: true,

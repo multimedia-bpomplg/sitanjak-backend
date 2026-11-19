@@ -488,8 +488,14 @@ export const approveLogbook = async (req: Request, res: Response) => {
     // Notifikasi ke Peserta
     createNotification({
       recipientId: (logbook.user as any)._id,
-      title: approvalStatus === "disetujui" ? "Logbook Disetujui" : "Logbook Ditolak",
-      message: `Mentor Anda telah ${approvalStatus} logbook tanggal ${logbook.date}.`,
+      title:
+        approvalStatus === "disetujui"
+          ? "Laporan Harian Disetujui"
+          : "Laporan Harian Ditolak",
+      message:
+        approvalStatus === "disetujui"
+          ? `Laporan harian Anda untuk tanggal ${logbook.date} telah disetujui oleh Mentor.`
+          : `Laporan harian Anda untuk tanggal ${logbook.date} ditolak oleh Mentor${mentorNote ? `: "${mentorNote}"` : "."}`,
       type: approvalStatus === "disetujui" ? "success" : "alert",
       linkUrl: "/dashboard/peserta/isi-logbook",
     });

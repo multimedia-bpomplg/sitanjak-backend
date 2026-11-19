@@ -4,6 +4,7 @@ import EvaluasiMagang from "../models/EvaluasiMagang";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import { resolveKategoriMagang } from "../utils/pesertaKategori";
+import { createNotification } from "../services/notificationService";
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -496,6 +497,22 @@ export const reviewEvaluasi = async (req: any, res: Response) => {
     doc.reviewedByName = reviewer?.name || req.user?.name || "Pembimbing";
     doc.reviewedAt = new Date();
     await doc.save();
+
+    if (doc.user) {
+      createNotification({
+        recipientId: doc.user,
+        title:
+          status === "Disetujui"
+            ? "Evaluasi Magang Disetujui"
+            : "Revisi Evaluasi Diminta",
+        message:
+          status === "Disetujui"
+            ? "Evaluasi & Surat Pernyataan Anda telah disetujui oleh Mentor. PDF siap diunduh."
+            : `Mentor meminta revisi Evaluasi & Surat Pernyataan Anda: "${cleanNote}"`,
+        type: status === "Disetujui" ? "success" : "warning",
+        linkUrl: "/dashboard/peserta/evaluasi",
+      });
+    }
 
     return res.json({
       success: true,

@@ -10,6 +10,8 @@ import { connectDB } from "./config/database";
 import { maintenanceMiddleware } from "./middlewares/maintenance.middleware";
 import { startWhatsapp } from "./utils/whatsappClient";
 import { autoNonaktifPeserta } from "./jobs/autoNonaktifPeserta";
+import { reminderAbsenPulangJob } from "./jobs/reminderAbsenPulang";
+import { ensureDefaultHolidaysSeeded } from "./services/holidayService";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -58,8 +60,12 @@ app.listen(PORT, async () => {
     /* START WHATSAPP */
     await startWhatsapp();
 
+    /* SEED DEFAULT HOLIDAYS (JIKA KOSONG) */
+    await ensureDefaultHolidaysSeeded();
+
     /* START CRON JOB */
     autoNonaktifPeserta();
+    reminderAbsenPulangJob();
 
     console.log("===========================================");
     console.log("🚀 BPOM Internship API Server");

@@ -7,6 +7,7 @@ import LaporanAkhir from "../models/LaporanAkhir";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import { uploadLaporanAkhir } from "../middlewares/upload.middleware";
+import { createNotification } from "../services/notificationService";
 
 /* ================= DATE HELPERS (WIB) ================= */
 function getNowWIB(): Date {
@@ -427,6 +428,22 @@ export const updateStatusDanPenilaian = async (req: any, res: Response) => {
     })
       .populate("user", "name email")
       .populate("approvedByMentor", "name email");
+
+    if ((laporan.user as any)?._id && (status === "Disetujui" || status === "Ditolak")) {
+      createNotification({
+        recipientId: (laporan.user as any)._id,
+        title:
+          status === "Disetujui"
+            ? "Laporan Akhir Disetujui"
+            : "Laporan Akhir Ditolak",
+        message:
+          status === "Disetujui"
+            ? "Laporan akhir magang Anda telah disetujui oleh Mentor."
+            : `Laporan akhir magang Anda ditolak oleh Mentor${mentorNote ? `: "${mentorNote}"` : "."}`,
+        type: status === "Disetujui" ? "success" : "alert",
+        linkUrl: "/dashboard/peserta/laporan-akhir",
+      });
+    }
 
     res.json({
       message: `Status laporan berhasil diubah menjadi "${status}"`,
