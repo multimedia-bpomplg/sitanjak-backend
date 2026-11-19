@@ -97,17 +97,27 @@ export const getUserNotifications = async (
     .limit(limit)
     .lean();
 
-  const formatted = notifications.map((n: any) => ({
-    id: n._id.toString(),
-    title: n.title,
-    message: n.message,
-    type: n.type,
-    linkUrl: n.linkUrl,
-    createdAt: n.createdAt,
-    isRead:
-      Array.isArray(n.readBy) &&
-      n.readBy.some((uid: any) => uid.toString() === userId),
-  }));
+  const isSuperadmin = userRoles.includes("superadmin");
+
+  const formatted = notifications.map((n: any) => {
+    const rawLink = typeof n.linkUrl === "string" ? n.linkUrl : "";
+    const resolvedLink =
+      isSuperadmin && rawLink.startsWith("/dashboard/admin")
+        ? rawLink.replace(/^\/dashboard\/admin(?=\/|$)/, "/dashboard/superadmin")
+        : rawLink;
+
+    return {
+      id: n._id.toString(),
+      title: n.title,
+      message: n.message,
+      type: n.type,
+      linkUrl: resolvedLink,
+      createdAt: n.createdAt,
+      isRead:
+        Array.isArray(n.readBy) &&
+        n.readBy.some((uid: any) => uid.toString() === userId),
+    };
+  });
 
   const unreadCount = await Notification.countDocuments({
     ...filter,
