@@ -196,6 +196,8 @@ export const verifyOtpLogin = async (req: Request, res: Response) => {
       roleNames,
     );
 
+    const tokenExpiresIn = roleNames.includes("peserta") ? "7d" : "1d";
+
     const token = jwt.sign(
       {
         id: user._id,
@@ -208,7 +210,7 @@ export const verifyOtpLogin = async (req: Request, res: Response) => {
         deviceFingerprint,
       },
       process.env.JWT_SECRET as string,
-      { expiresIn: "1d" },
+      { expiresIn: tokenExpiresIn },
     );
 
     await Otp.deleteMany({

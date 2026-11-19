@@ -84,6 +84,8 @@ export const login = async (req: Request, res: Response) => {
 
     await delay(1000);
 
+    const tokenExpiresIn = roleNames.includes("peserta") ? "7d" : "1d";
+
     const token = jwt.sign(
       {
         id: user._id,
@@ -96,7 +98,7 @@ export const login = async (req: Request, res: Response) => {
         kategoriMagang,
       },
       process.env.JWT_SECRET as string,
-      { expiresIn: "1d" },
+      { expiresIn: tokenExpiresIn },
     );
 
     res.json({
