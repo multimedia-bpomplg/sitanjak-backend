@@ -9,6 +9,11 @@ import {
   getHMinus3CutoffIso,
   getFullInternshipWorkdaysUntilHMinus3,
 } from "../utils/absensiScoring";
+import {
+  ensureDefaultHolidaysSeeded,
+  getHolidayDateSet,
+  isHolidayWib,
+} from "../services/holidayService";
 
 /* ================= CONSTANTS ================= */
 
@@ -74,6 +79,7 @@ function getExpectedWorkdays(
   startIso: string | null,
   endIso: string | null,
   cutoffEndIso: string,
+  holidayDates?: Set<string>,
 ): Set<string> {
   const result = new Set<string>();
   if (!startIso) return result;
@@ -89,8 +95,9 @@ function getExpectedWorkdays(
   let guard = 0;
   while (cur <= last && guard < 400) {
     const day = cur.getDay();
-    if (day !== 0 && day !== 6) {
-      result.add(toIsoDate(cur));
+    const iso = toIsoDate(cur);
+    if (day !== 0 && day !== 6 && !holidayDates?.has(iso)) {
+      result.add(iso);
     }
     cur.setDate(cur.getDate() + 1);
     guard++;
@@ -329,19 +336,23 @@ export const getTodayAbsensi = async (req: any, res: Response) => {
     const nowWib = getNowWIB();
     const todayIso = toIsoDate(nowWib);
 
-    const record = await Absensi.findOne({
-      user: userId,
-      date: todayIso,
-    });
+    await ensureDefaultHolidaysSeeded();
 
-    const hasLogbookToday = Boolean(
-      await Logbook.exists({ user: userId, date: todayIso }),
-    );
+    const [record, logbookExists, holidayStatus] = await Promise.all([
+      Absensi.findOne({
+        user: userId,
+        date: todayIso,
+      }),
+      Logbook.exists({ user: userId, date: todayIso }),
+      isHolidayWib(todayIso),
+    ]);
 
     return res.json({
       date: todayIso,
       absensi: record || null,
-      hasLogbookToday,
+      hasLogbookToday: Boolean(logbookExists),
+      isHoliday: holidayStatus.isHoliday,
+      holidayReason: holidayStatus.reason || null,
     });
   } catch (err) {
     console.error("[GET TODAY ABSENSI ERROR]", err);
@@ -396,6 +407,8 @@ export const getAbsensiSummary = async (req: any, res: Response) => {
         (email && p.email?.toLowerCase() === email),
     );
 
+    const holidayDates = await getHolidayDateSet();
+
     const { startIso: magangStartIso, cutoffEndIso: hMinus3Iso } =
       getHMinus3CutoffIso(
         peserta?.tanggalMulaiMagang,
@@ -406,6 +419,7 @@ export const getAbsensiSummary = async (req: any, res: Response) => {
         ? getFullInternshipWorkdaysUntilHMinus3(
             peserta.tanggalMulaiMagang,
             peserta.tanggalSelesaiMagang,
+            holidayDates,
           )
         : new Set<string>();
 
@@ -504,6 +518,16 @@ export const submitCheckIn = async (req: any, res: Response) => {
       return res
         .status(activeCheck.statusCode)
         .json({ message: activeCheck.message });
+    }
+
+    // 1a. Hari libur (akhir pekan / libur nasional) tidak perlu absensi
+    await ensureDefaultHolidaysSeeded();
+    const holidayStatus = await isHolidayWib(todayIso);
+    if (holidayStatus.isHoliday) {
+      removeUploadedFile(newPhotoPath);
+      return res.status(403).json({
+        message: `Hari ini (${holidayStatus.reason || "Hari Libur"}) merupakan jadwal libur. Anda tidak perlu melakukan absensi.`,
+      });
     }
 
     // 1b. Kunci setelah pukul 23.00 WIB
@@ -646,6 +670,16 @@ export const submitCheckOut = async (req: any, res: Response) => {
         .json({ message: activeCheck.message });
     }
 
+    // 1a. Hari libur (akhir pekan / libur nasional) tidak perlu absensi
+    await ensureDefaultHolidaysSeeded();
+    const holidayStatus = await isHolidayWib(todayIso);
+    if (holidayStatus.isHoliday) {
+      removeUploadedFile(newPhotoPath);
+      return res.status(403).json({
+        message: `Hari ini (${holidayStatus.reason || "Hari Libur"}) merupakan jadwal libur. Anda tidak perlu melakukan absensi.`,
+      });
+    }
+
     // 1b. Kunci setelah pukul 23.00 WIB
     if (isPastAttendanceCutoffWib(nowWib)) {
       removeUploadedFile(newPhotoPath);
@@ -783,6 +817,14 @@ export const submitIzin = async (req: any, res: Response) => {
       return res
         .status(activeCheck.statusCode)
         .json({ message: activeCheck.message });
+    }
+
+    await ensureDefaultHolidaysSeeded();
+    const holidayStatus = await isHolidayWib(todayIso);
+    if (holidayStatus.isHoliday) {
+      return res.status(403).json({
+        message: `Hari ini (${holidayStatus.reason || "Hari Libur"}) merupakan jadwal libur. Anda tidak perlu mengajukan izin atau absensi.`,
+      });
     }
 
     if (isPastAttendanceCutoffWib(nowWib)) {
@@ -978,17 +1020,30 @@ export const getManageAbsensiList = async (req: any, res: Response) => {
       });
     }
 
-    const rawRecords = await Absensi.find(mongoQuery)
-      .populate("user", "name email")
-      .sort({ date: -1, updatedAt: -1 })
-      .limit(500);
+    const [rawRecords, holidayDates] = await Promise.all([
+      Absensi.find(mongoQuery)
+        .populate("user", "name email")
+        .sort({ date: -1, updatedAt: -1 })
+        .limit(500),
+      getHolidayDateSet(),
+    ]);
 
     const areaFilter = String(req.query.area || "all");
     const searchQ = String(req.query.search || "")
       .trim()
       .toLowerCase();
 
-    const enriched = rawRecords
+    const recordedByUserKey = new Set<string>();
+    rawRecords.forEach((rec: any) => {
+      const d = rec.date ? String(rec.date).trim() : "";
+      if (!d) return;
+      const uId = rec.user?._id ? rec.user._id.toString() : rec.user?.toString();
+      const emailLower = (rec.email || rec.user?.email || "").toLowerCase();
+      if (uId) recordedByUserKey.add(`uid:${uId}__${d}`);
+      if (emailLower) recordedByUserKey.add(`email:${emailLower}__${d}`);
+    });
+
+    const realItems = rawRecords
       .map((rec: any) => {
         const uId = rec.user?._id ? rec.user._id.toString() : rec.user?.toString();
         const emailLower = (rec.email || rec.user?.email || "").toLowerCase();
@@ -1046,7 +1101,8 @@ export const getManageAbsensiList = async (req: any, res: Response) => {
           posisi,
           institusi,
           mentorName,
-          attendanceMode,
+          attendanceMode: attendanceMode as "masuk" | "wfh" | "izin" | "tidak_absen",
+          isVirtualMissed: false,
           izinNote: rec.izinNote || "",
           izinSubmittedWIB: rec.izinSubmittedWIB || "",
           checkIn: normIn,
@@ -1059,6 +1115,7 @@ export const getManageAbsensiList = async (req: any, res: Response) => {
         };
       })
       .filter((item) => {
+        if (areaFilter === "missed") return false;
         if (areaFilter === "inside") {
           if (item.attendanceMode === "izin" || item.isAnyOutside) return false;
         }
@@ -1073,6 +1130,96 @@ export const getManageAbsensiList = async (req: any, res: Response) => {
         }
         return true;
       });
+
+    // Sertakan tanggal hari kerja yang sudah terlewat tanpa Check-In / Izin ("tidak_absen")
+    const virtualMissedItems: typeof realItems = [];
+    const shouldIncludeMissed =
+      areaFilter === "" || areaFilter === "all" || areaFilter === "missed";
+
+    if (shouldIncludeMissed) {
+      const nowWib = getNowWIB();
+      const todayIso = toIsoDate(nowWib);
+      const defaultCutoffEndIso = isPastAttendanceCutoffWib(nowWib)
+        ? todayIso
+        : shiftIsoDate(todayIso, -1);
+
+      const qDate =
+        req.query.date &&
+        typeof req.query.date === "string" &&
+        req.query.date !== "all"
+          ? String(req.query.date).trim()
+          : null;
+      const qStart = req.query.startDate ? String(req.query.startDate).trim() : null;
+      const qEnd = req.query.endDate ? String(req.query.endDate).trim() : null;
+
+      for (const ps of scope.pesertaList) {
+        if (!ps.email || ps.statusMagang === "Tidak Magang") continue;
+        if (searchQ) {
+          const hay = `${ps.nama} ${ps.email} ${ps.posisi} ${ps.institusi} ${ps.mentorName}`.toLowerCase();
+          if (!hay.includes(searchQ)) continue;
+        }
+
+        const { startIso: rawStartIso, cutoffEndIso: hMinus3Iso } =
+          getHMinus3CutoffIso(ps.tanggalMulaiMagang, ps.tanggalSelesaiMagang);
+        let startIso = rawStartIso;
+        let endIso = hMinus3Iso;
+        let cutoffEndIso =
+          hMinus3Iso && hMinus3Iso < defaultCutoffEndIso
+            ? hMinus3Iso
+            : defaultCutoffEndIso;
+
+        if (qDate) {
+          if (!startIso || qDate > startIso) startIso = qDate;
+          if (!endIso || qDate < endIso) endIso = qDate;
+          if (qDate < cutoffEndIso) cutoffEndIso = qDate;
+        } else {
+          if (qStart && (!startIso || qStart > startIso)) startIso = qStart;
+          if (qEnd && qEnd < cutoffEndIso) cutoffEndIso = qEnd;
+        }
+
+        const expectedDates = getExpectedWorkdays(
+          startIso,
+          endIso,
+          cutoffEndIso,
+          holidayDates,
+        );
+
+        for (const d of expectedDates) {
+          const hasByUid =
+            ps.userId && recordedByUserKey.has(`uid:${ps.userId}__${d}`);
+          const hasByEmail = recordedByUserKey.has(`email:${ps.email}__${d}`);
+          if (hasByUid || hasByEmail) continue;
+
+          virtualMissedItems.push({
+            _id: `missed_${ps.email}_${d}`,
+            date: d,
+            userId: ps.userId || "",
+            email: ps.email,
+            namaPeserta: ps.nama,
+            posisi: ps.posisi,
+            institusi: ps.institusi,
+            mentorName: ps.mentorName,
+            attendanceMode: "tidak_absen",
+            isVirtualMissed: true,
+            izinNote: "",
+            izinSubmittedWIB: "",
+            checkIn: null,
+            checkOut: null,
+            dailyScore: 0,
+            isAnyOutside: false,
+            koreksiNote: "",
+            koreksiBy: null,
+            koreksiAt: null,
+          });
+        }
+      }
+    }
+
+    const enriched = [...realItems, ...virtualMissedItems].sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) ||
+        a.namaPeserta.localeCompare(b.namaPeserta),
+    );
 
     const totalRecords = enriched.length;
     const tepatWaktuCount = enriched.filter(
@@ -1121,9 +1268,12 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
       .trim()
       .toLowerCase();
 
-    const records = mongoQuery
-      ? await Absensi.find(mongoQuery).populate("user", "name email")
-      : [];
+    const [records, holidayDates] = await Promise.all([
+      mongoQuery
+        ? Absensi.find(mongoQuery).populate("user", "name email")
+        : Promise.resolve([]),
+      getHolidayDateSet(),
+    ]);
 
     const nowWib = getNowWIB();
     const todayIso = toIsoDate(nowWib);
@@ -1236,6 +1386,7 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
       const psExpectedWorkdays = getFullInternshipWorkdaysUntilHMinus3(
         acc.tanggalMulaiMagang,
         acc.tanggalSelesaiMagang,
+        holidayDates,
       );
 
       // Abaikan absensi di luar periode magang atau setelah H-3 selesai magang
@@ -1298,6 +1449,7 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
     const result = Array.from(map.values())
       .map((acc) => {
         let tidakAbsen = 0;
+        const missedDates: string[] = [];
         if (acc.statusMagang !== "Tidak Magang") {
           const { startIso: rawStartIso, cutoffEndIso: hMinus3Iso } =
             getHMinus3CutoffIso(
@@ -1306,7 +1458,10 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
             );
           let startIso = rawStartIso;
           let endIso = hMinus3Iso;
-          let cutoffEndIso = hMinus3Iso || defaultCutoffEndIso;
+          let cutoffEndIso =
+            hMinus3Iso && hMinus3Iso < defaultCutoffEndIso
+              ? hMinus3Iso
+              : defaultCutoffEndIso;
 
           if (filterDate) {
             if (!startIso || filterDate > startIso) startIso = filterDate;
@@ -1325,12 +1480,15 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
             startIso,
             endIso,
             cutoffEndIso,
+            holidayDates,
           );
           for (const d of expectedDates) {
             if (!acc.attendedDates.has(d)) {
               tidakAbsen += 1;
+              missedDates.push(d);
             }
           }
+          missedDates.sort((a, b) => b.localeCompare(a));
         }
 
         const totalHariKerja = acc.totalHari + tidakAbsen;
@@ -1348,6 +1506,7 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
           wfhCount: acc.wfhCount,
           izinCount: acc.izinCount,
           tidakAbsen,
+          missedDates,
           totalHariKerja,
           tepatWaktuMasuk: acc.tepatWaktuMasuk,
           telatMasuk: acc.telatMasuk,

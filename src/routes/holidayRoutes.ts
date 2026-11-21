@@ -21,6 +21,12 @@ router.post(
   upsertHoliday,
 );
 router.post(
+  "/sync",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  restoreDefaultHolidays2026,
+);
+router.post(
   "/seed-2026",
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),

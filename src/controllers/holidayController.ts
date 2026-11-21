@@ -4,7 +4,7 @@ import { AuthRequest } from "../middlewares/auth.middleware";
 import {
   ensureDefaultHolidaysSeeded,
   isHolidayWib,
-  seedDefaultHolidays2026,
+  syncHolidaysForYear,
 } from "../services/holidayService";
 
 const VALID_TYPES: HolidayType[] = [
@@ -21,11 +21,12 @@ function getTodayIsoWib(): string {
 
 export const getHolidays = async (req: AuthRequest, res: Response) => {
   try {
-    await ensureDefaultHolidaysSeeded();
+    const yearStr = String(req.query.year || "").trim();
+    const targetYear = /^\d{4}$/.test(yearStr) ? Number(yearStr) : undefined;
+    await ensureDefaultHolidaysSeeded(targetYear);
 
-    const year = String(req.query.year || "").trim();
-    const filter = year && /^\d{4}$/.test(year)
-      ? { date: { $regex: `^${year}-` } }
+    const filter = targetYear
+      ? { date: { $regex: `^${targetYear}-` } }
       : {};
 
     const holidays = await Holiday.find(filter).sort({ date: 1 }).lean();
@@ -64,7 +65,7 @@ export const upsertHoliday = async (req: AuthRequest, res: Response) => {
   try {
     const date = String(req.body?.date || "").trim();
     const name = String(req.body?.name || "").trim();
-    const rawType = String(req.body?.type || "libur_nasional").trim() as HolidayType;
+    const rawType = String(req.body?.type || "khusus").trim() as HolidayType;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({
@@ -80,7 +81,7 @@ export const upsertHoliday = async (req: AuthRequest, res: Response) => {
 
     const type: HolidayType = VALID_TYPES.includes(rawType)
       ? rawType
-      : "libur_nasional";
+      : "khusus";
 
     const saved = await Holiday.findOneAndUpdate(
       { date },
@@ -89,6 +90,7 @@ export const upsertHoliday = async (req: AuthRequest, res: Response) => {
           date,
           name,
           type,
+          source: "manual",
           createdBy: req.user?.id || null,
         },
       },
@@ -97,7 +99,7 @@ export const upsertHoliday = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: "Hari libur berhasil disimpan",
+      message: "Hari libur khusus berhasil disimpan",
       data: saved,
     });
   } catch (err) {
@@ -131,24 +133,28 @@ export const deleteHoliday = async (req: AuthRequest, res: Response) => {
 };
 
 export const restoreDefaultHolidays2026 = async (
-  _req: AuthRequest,
+  req: AuthRequest,
   res: Response,
 ) => {
   try {
-    const inserted = await seedDefaultHolidays2026();
+    const rawYear = String(req.query?.year || req.body?.year || "").trim();
+    const fallbackYear = Number(getTodayIsoWib().slice(0, 4));
+    const targetYear = /^\d{4}$/.test(rawYear) ? Number(rawYear) : fallbackYear;
+
+    const result = await syncHolidaysForYear(targetYear, true);
     return res.json({
       success: true,
       message:
-        inserted > 0
-          ? `${inserted} hari libur nasional 2026 berhasil ditambahkan.`
-          : "Seluruh hari libur nasional 2026 bawaan sudah tersedia.",
-      inserted,
+        result.source === "google_calendar"
+          ? `${result.synced} hari libur kalender Indonesia tahun ${targetYear} berhasil disinkronkan.`
+          : `Kalender lokal tahun ${targetYear} diperbarui (${result.synced} entri baru).`,
+      ...result,
     });
   } catch (err) {
-    console.error("[SEED HOLIDAYS ERROR]", err);
+    console.error("[SYNC HOLIDAYS ERROR]", err);
     return res.status(500).json({
       success: false,
-      message: "Gagal memuat ulang libur nasional 2026",
+      message: "Gagal menyinkronkan libur nasional dari kalender",
     });
   }
 };

@@ -25,6 +25,7 @@ import {
 import { updatePosisiPeserta } from "../controllers/superadminController";
 import {
   getAllLogbook,
+  getLogbookMonitoringOverview,
   superadminApproveLogbook,
   enableMissedDay,
 } from "../controllers/superadminLogbookController";
@@ -173,6 +174,13 @@ router.get(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   getAllLogbook,
+);
+
+router.get(
+  "/logbook/monitoring",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getLogbookMonitoringOverview,
 );
 
 router.put(

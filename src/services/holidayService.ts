@@ -1,4 +1,21 @@
+import axios from "axios";
 import Holiday, { HolidayType } from "../models/Holiday";
+
+const GCAL_EN_ID_ICS_URL =
+  "https://calendar.google.com/calendar/ical/en.indonesian%23holiday%40group.v.calendar.google.com/public/basic.ics";
+const GCAL_ID_ID_ICS_URL =
+  "https://calendar.google.com/calendar/ical/id.indonesian%23holiday%40group.v.calendar.google.com/public/basic.ics";
+
+const SYNC_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 jam
+const syncedYearsCache = new Map<number, number>();
+const inFlightYearSync = new Map<
+  number,
+  Promise<{
+    year: number;
+    synced: number;
+    source: "google_calendar" | "fallback" | "cached";
+  }>
+>();
 
 export const DEFAULT_HOLIDAYS_2026: Array<{
   date: string;
@@ -24,8 +41,132 @@ export const DEFAULT_HOLIDAYS_2026: Array<{
   { date: "2026-12-25", name: "Kelahiran Yesus Kristus (Natal)", type: "libur_nasional" },
 ];
 
+interface ParsedIcsEvent {
+  date: string;
+  summary: string;
+  description: string;
+}
+
+function unescapeIcsText(raw: string): string {
+  return raw
+    .replace(/\\n/gi, " ")
+    .replace(/\\,/g, ",")
+    .replace(/\\;/g, ";")
+    .replace(/\\\\/g, "\\")
+    .trim();
+}
+
+function parseIcsEvents(rawIcs: string): ParsedIcsEvent[] {
+  const unfolded = rawIcs.replace(/\r?\n[ \t]/g, "");
+  const blocks = unfolded.split("BEGIN:VEVENT").slice(1);
+  const events: ParsedIcsEvent[] = [];
+
+  for (const block of blocks) {
+    const endIdx = block.indexOf("END:VEVENT");
+    const body = endIdx >= 0 ? block.slice(0, endIdx) : block;
+
+    const dtMatch = /^DTSTART[^:\r\n]*:(\d{4})(\d{2})(\d{2})/m.exec(body);
+    if (!dtMatch) continue;
+    const date = `${dtMatch[1]}-${dtMatch[2]}-${dtMatch[3]}`;
+
+    const sumMatch = /^SUMMARY[^:\r\n]*:([^\r\n]*)/m.exec(body);
+    const descMatch = /^DESCRIPTION[^:\r\n]*:([^\r\n]*)/m.exec(body);
+
+    events.push({
+      date,
+      summary: sumMatch ? unescapeIcsText(sumMatch[1]) : "",
+      description: descMatch ? unescapeIcsText(descMatch[1]) : "",
+    });
+  }
+
+  return events;
+}
+
+function getCurrentYearWib(): number {
+  const iso = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Jakarta",
+  });
+  return Number(iso.slice(0, 4)) || new Date().getFullYear();
+}
+
+async function fetchIndonesianCalendarHolidaysForYear(
+  year: number,
+): Promise<Array<{ date: string; name: string; type: HolidayType }>> {
+  const yearPrefix = `${year}-`;
+  const [enRes, idRes] = await Promise.all([
+    axios.get<string>(GCAL_EN_ID_ICS_URL, {
+      timeout: 7000,
+      responseType: "text",
+    }),
+    axios
+      .get<string>(GCAL_ID_ID_ICS_URL, {
+        timeout: 7000,
+        responseType: "text",
+      })
+      .catch(() => null),
+  ]);
+
+  const enEvents = parseIcsEvents(enRes.data || "").filter(
+    (ev) =>
+      ev.date.startsWith(yearPrefix) &&
+      ev.description.toLowerCase().includes("public holiday"),
+  );
+
+  // Kumpulkan nama berbahasa Indonesia dari feed id.indonesian berdasarkan tanggal
+  const idNameByDate = new Map<string, string[]>();
+  if (idRes?.data) {
+    const idEvents = parseIcsEvents(idRes.data).filter((ev) =>
+      ev.date.startsWith(yearPrefix),
+    );
+    for (const ev of idEvents) {
+      if (!ev.summary) continue;
+      const list = idNameByDate.get(ev.date) || [];
+      if (!list.includes(ev.summary)) {
+        list.push(ev.summary);
+      }
+      idNameByDate.set(ev.date, list);
+    }
+  }
+
+  const byDate = new Map<
+    string,
+    { date: string; name: string; type: HolidayType }
+  >();
+
+  for (const ev of enEvents) {
+    const isJoint = /joint holiday/i.test(ev.summary);
+    const idCandidates = idNameByDate.get(ev.date) || [];
+
+    // Jika ada lebih dari 1 event di tanggal sama (misal cuti bersama vs perayaan), prioritaskan yang cocok
+    let resolvedName = ev.summary;
+    if (idCandidates.length === 1) {
+      resolvedName = idCandidates[0];
+    } else if (idCandidates.length > 1) {
+      const jointMatch = idCandidates.find((c) => /cuti bersama/i.test(c));
+      const nonJointMatch = idCandidates.find((c) => !/cuti bersama/i.test(c));
+      resolvedName =
+        (isJoint ? jointMatch : nonJointMatch) || idCandidates[0] || ev.summary;
+    }
+
+    const type: HolidayType =
+      isJoint || /cuti bersama/i.test(resolvedName)
+        ? "cuti_bersama"
+        : "libur_nasional";
+
+    byDate.set(ev.date, {
+      date: ev.date,
+      name: resolvedName,
+      type,
+    });
+  }
+
+  return Array.from(byDate.values()).sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+}
+
 /**
- * Menambahkan daftar libur default 2026 tanpa menimpa tanggal yang sudah ada.
+ * Menyimpan daftar libur bawaan 2026 sebagai fallback tanpa menimpa libur manual admin.
  */
 export async function seedDefaultHolidays2026(): Promise<number> {
   const ops = DEFAULT_HOLIDAYS_2026.map((item) => ({
@@ -36,6 +177,8 @@ export async function seedDefaultHolidays2026(): Promise<number> {
           date: item.date,
           name: item.name,
           type: item.type,
+          source: "auto",
+          createdBy: null,
         },
       },
       upsert: true,
@@ -47,16 +190,128 @@ export async function seedDefaultHolidays2026(): Promise<number> {
 }
 
 /**
- * Mengisi libur bawaan hanya jika koleksi Holiday masih kosong.
+ * Sinkronisasi hari libur nasional & cuti bersama Indonesia otomatis dari Google Calendar publik
+ * untuk tahun tertentu, dengan fallback lokal untuk tahun 2026 bila jaringan tidak tersedia.
  */
-export async function ensureDefaultHolidaysSeeded(): Promise<void> {
-  try {
-    const count = await Holiday.estimatedDocumentCount();
-    if (count === 0) {
-      await seedDefaultHolidays2026();
+export async function syncHolidaysForYear(
+  year: number = getCurrentYearWib(),
+  force = false,
+): Promise<{
+  year: number;
+  synced: number;
+  source: "google_calendar" | "fallback" | "cached";
+}> {
+  const lastSync = syncedYearsCache.get(year);
+  if (!force && lastSync && Date.now() - lastSync < SYNC_CACHE_TTL_MS) {
+    return { year, synced: 0, source: "cached" };
+  }
+
+  const existingPromise = inFlightYearSync.get(year);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const task = (async (): Promise<{
+    year: number;
+    synced: number;
+    source: "google_calendar" | "fallback" | "cached";
+  }> => {
+    try {
+      const calendarItems = await fetchIndonesianCalendarHolidaysForYear(year);
+
+      if (calendarItems.length > 0) {
+        // Jangan timpa tanggal yang sudah diatur manual oleh admin/superadmin
+        const manualDocs = await Holiday.find({
+          date: { $regex: `^${year}-` },
+          source: "manual",
+        })
+          .select("date")
+          .lean();
+        const manualDates = new Set(
+          (manualDocs as any[]).map((d) => String(d.date)),
+        );
+
+        const itemsToUpsert = calendarItems.filter(
+          (item) => !manualDates.has(item.date),
+        );
+
+        if (itemsToUpsert.length > 0) {
+          const ops = itemsToUpsert.map((item) => ({
+            updateOne: {
+              filter: { date: item.date },
+              update: {
+                $set: {
+                  name: item.name,
+                  type: item.type,
+                  source: "auto",
+                  createdBy: null,
+                },
+              },
+              upsert: true,
+            },
+          }));
+          await Holiday.bulkWrite(ops);
+        }
+
+        syncedYearsCache.set(year, Date.now());
+        return {
+          year,
+          synced: itemsToUpsert.length,
+          source: "google_calendar",
+        };
+      }
+    } catch (err) {
+      console.warn(
+        `⚠️ [HolidayService] Gagal sinkronisasi kalender Google (${year}):`,
+        err instanceof Error ? err.message : err,
+      );
     }
+
+    // Fallback offline untuk tahun 2026 bila feed kalender tidak dapat diakses
+    if (year === 2026) {
+      const inserted = await seedDefaultHolidays2026();
+      syncedYearsCache.set(year, Date.now());
+      return { year, synced: inserted, source: "fallback" };
+    }
+
+    return { year, synced: 0, source: "fallback" };
+  })();
+
+  inFlightYearSync.set(year, task);
+  try {
+    return await task;
+  } finally {
+    inFlightYearSync.delete(year);
+  }
+}
+
+/**
+ * Memastikan hari libur tahun berjalan (dan tahun target bila diberikan) sudah tersinkronisasi dari kalender.
+ */
+export async function ensureDefaultHolidaysSeeded(
+  targetYear?: number,
+): Promise<void> {
+  try {
+    const currentYear = getCurrentYearWib();
+    const yearsToSync = new Set<number>([currentYear]);
+    if (targetYear && Number.isInteger(targetYear)) {
+      yearsToSync.add(targetYear);
+    }
+    // Menjelang akhir tahun (Nov-Des), ikut sinkronkan tahun berikutnya untuk periode magang lintas tahun
+    const monthNow = Number(
+      new Date()
+        .toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" })
+        .slice(5, 7),
+    );
+    if (monthNow >= 11) {
+      yearsToSync.add(currentYear + 1);
+    }
+
+    await Promise.all(
+      Array.from(yearsToSync).map((y) => syncHolidaysForYear(y)),
+    );
   } catch (err) {
-    console.warn("⚠️ [HolidayService] Gagal auto-seed hari libur:", err);
+    console.warn("⚠️ [HolidayService] Gagal sinkronisasi hari libur:", err);
   }
 }
 
@@ -67,6 +322,11 @@ export async function isHolidayWib(dateIso: string): Promise<{
   isHoliday: boolean;
   reason?: string;
 }> {
+  const targetYear = Number(dateIso.slice(0, 4));
+  await ensureDefaultHolidaysSeeded(
+    Number.isInteger(targetYear) ? targetYear : undefined,
+  );
+
   const [y, m, d] = dateIso.split("-").map(Number);
   if (y && m && d) {
     const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
@@ -87,4 +347,19 @@ export async function isHolidayWib(dateIso: string): Promise<{
   }
 
   return { isHoliday: false };
+}
+
+/**
+ * Mengambil seluruh tanggal hari libur nasional/khusus (YYYY-MM-DD) dari database.
+ */
+export async function getHolidayDateSet(): Promise<Set<string>> {
+  await ensureDefaultHolidaysSeeded();
+  const docs = await Holiday.find().select("date").lean();
+  const set = new Set<string>();
+  for (const doc of docs as any[]) {
+    if (doc?.date) {
+      set.add(String(doc.date).trim());
+    }
+  }
+  return set;
 }

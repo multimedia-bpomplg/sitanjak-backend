@@ -7,6 +7,7 @@ import LaporanAkhir from "../models/LaporanAkhir";
 import Absensi from "../models/Absensi";
 import { calculateFinalAttendanceScore } from "../utils/absensiScoring";
 import { createNotification } from "../services/notificationService";
+import { getHolidayDateSet } from "../services/holidayService";
 
 /* ================= HELPERS ================= */
 
@@ -69,7 +70,7 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
 
     if (penilaian) {
       const emailRegex = email ? new RegExp(`^${escapeRegex(email)}$`, "i") : null;
-      const [pendaftaran, absensiRecords] = await Promise.all([
+      const [pendaftaran, absensiRecords, holidayDates] = await Promise.all([
         Pendaftaran.findOne({
           status: "Disetujui",
           $or: [
@@ -86,6 +87,7 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
             ...(emailRegex ? [{ email: emailRegex }] : []),
           ],
         }).lean(),
+        getHolidayDateSet(),
       ]);
 
       const ps = (pendaftaran as any)?.peserta?.find(
@@ -98,6 +100,7 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
         absensiRecords,
         ps?.tanggalMulaiMagang,
         ps?.tanggalSelesaiMagang,
+        holidayDates,
       );
 
       const a1 = {
@@ -252,7 +255,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
       absensiMatchConditions.push({ email: { $in: emails } });
     }
 
-    const [penilaianList, laporanList, allAbsensiDocs] = hasAnyTarget
+    const [penilaianList, laporanList, allAbsensiDocs, holidayDates] = hasAnyTarget
       ? await Promise.all([
           PenilaianAkhir.find({
             $or: [
@@ -270,8 +273,9 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
                 .lean()
             : Promise.resolve([]),
           Absensi.find({ $or: absensiMatchConditions }).lean(),
+          getHolidayDateSet(),
         ])
-      : [[], [], []];
+      : [[], [], [], new Set<string>()];
 
     const penilaianByUserId = new Map<string, any>();
     const penilaianByEmail = new Map<string, any>();
@@ -318,6 +322,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
         mergedRecords,
         p.tanggalMulaiMagang,
         p.tanggalSelesaiMagang,
+        holidayDates,
       );
 
       const absInfo = {
@@ -465,11 +470,15 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
     if (targetEmailRegex) {
       absensiMatchOr.push({ email: targetEmailRegex });
     }
-    const absensiDocs = await Absensi.find({ $or: absensiMatchOr }).lean();
+    const [absensiDocs, holidayDates] = await Promise.all([
+      Absensi.find({ $or: absensiMatchOr }).lean(),
+      getHolidayDateSet(),
+    ]);
     const attendanceCalc = calculateFinalAttendanceScore(
       absensiDocs,
       matchedMentee?.tanggalMulaiMagang,
       matchedMentee?.tanggalSelesaiMagang,
+      holidayDates,
     );
     const autoKehadiranNilai = attendanceCalc.averageScore;
     const a1 = {

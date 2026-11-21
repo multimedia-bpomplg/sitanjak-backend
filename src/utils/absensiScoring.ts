@@ -24,6 +24,52 @@ export function shiftIsoDate(dateIso: string, deltaDays: number): string {
   return toIsoDate(new Date(y, m - 1, d + deltaDays));
 }
 
+/**
+ * Mengembalikan tanggal batas akhir hari yang sudah selesai / melewati cutoff 23.00 WIB.
+ * Jika saat ini <= 23.00 WIB, batasnya adalah kemarin; jika > 23.00 WIB, batasnya adalah hari ini.
+ */
+export function getMissedCutoffDateWib(now: Date = new Date()): string {
+  const nowWib = toWibDate(now);
+  const todayIso = toIsoDate(nowWib);
+  const currentSec =
+    nowWib.getHours() * 3600 + nowWib.getMinutes() * 60 + nowWib.getSeconds();
+  return currentSec > 23 * 3600 ? todayIso : shiftIsoDate(todayIso, -1);
+}
+
+/**
+ * Menghasilkan daftar seluruh hari kerja (Senin-Jumat di luar hari libur nasional)
+ * pada rentang tanggal [startRaw .. endRaw].
+ */
+export function getWorkdaysInRange(
+  startRaw?: string | null,
+  endRaw?: string | null,
+  holidayDates?: Set<string>,
+): string[] {
+  const startIso = parseDateIso(startRaw);
+  const endIso = parseDateIso(endRaw);
+  if (!startIso || !endIso || endIso < startIso) {
+    return [];
+  }
+
+  const [sy, sm, sd] = startIso.split("-").map(Number);
+  const [ey, em, ed] = endIso.split("-").map(Number);
+  const cur = new Date(sy, sm - 1, sd);
+  const last = new Date(ey, em - 1, ed);
+  const result: string[] = [];
+
+  let guard = 0;
+  while (cur <= last && guard < 500) {
+    const day = cur.getDay();
+    const iso = toIsoDate(cur);
+    if (day !== 0 && day !== 6 && !holidayDates?.has(iso)) {
+      result.push(iso);
+    }
+    cur.setDate(cur.getDate() + 1);
+    guard++;
+  }
+  return result;
+}
+
 function scoreByDiffMinutes(minutes: number): number {
   if (minutes <= 0) return 100;
   if (minutes <= 30) return 90;
@@ -195,37 +241,19 @@ export function getHMinus3CutoffIso(
 }
 
 /**
- * Menghasilkan daftar seluruh hari kerja (Senin-Jumat) dari tanggalMulaiMagang
+ * Menghasilkan daftar seluruh hari kerja (Senin-Jumat di luar hari libur nasional) dari tanggalMulaiMagang
  * sampai dengan H-3 sebelum tanggalSelesaiMagang.
  */
 export function getFullInternshipWorkdaysUntilHMinus3(
   tanggalMulaiMagang?: string | null,
   tanggalSelesaiMagang?: string | null,
+  holidayDates?: Set<string>,
 ): Set<string> {
-  const result = new Set<string>();
   const { startIso, cutoffEndIso } = getHMinus3CutoffIso(
     tanggalMulaiMagang,
     tanggalSelesaiMagang,
   );
-  if (!startIso || !cutoffEndIso || cutoffEndIso < startIso) {
-    return result;
-  }
-
-  const [sy, sm, sd] = startIso.split("-").map(Number);
-  const [ey, em, ed] = cutoffEndIso.split("-").map(Number);
-  const cur = new Date(sy, sm - 1, sd);
-  const last = new Date(ey, em - 1, ed);
-
-  let guard = 0;
-  while (cur <= last && guard < 500) {
-    const day = cur.getDay();
-    if (day !== 0 && day !== 6) {
-      result.add(toIsoDate(cur));
-    }
-    cur.setDate(cur.getDate() + 1);
-    guard++;
-  }
-  return result;
+  return new Set(getWorkdaysInRange(startIso, cutoffEndIso, holidayDates));
 }
 
 /**
@@ -237,6 +265,7 @@ export function calculateFinalAttendanceScore(
   records: any[],
   tanggalMulaiMagang?: string | null,
   tanggalSelesaiMagang?: string | null,
+  holidayDates?: Set<string>,
 ): {
   totalHariHadir: number;
   tidakAbsen: number;
@@ -252,6 +281,7 @@ export function calculateFinalAttendanceScore(
   const expectedWorkdays = getFullInternshipWorkdaysUntilHMinus3(
     tanggalMulaiMagang,
     tanggalSelesaiMagang,
+    holidayDates,
   );
 
   // Filter record absensi hanya sampai H-3 (dan mulai dari startIso jika ada)

@@ -12,6 +12,12 @@ import Feedback from "../models/Feedback";
 import Absensi from "../models/Absensi";
 import PenilaianAkhir from "../models/PenilaianAkhir";
 import { resolveKategoriMagang } from "../utils/pesertaKategori";
+import { getHolidayDateSet } from "../services/holidayService";
+import {
+  getMissedCutoffDateWib,
+  getWorkdaysInRange,
+  parseDateIso,
+} from "../utils/absensiScoring";
 
 /* ================= BUAT AKUN MENTOR + EMAIL ================= */
 export const buatMentor = async (req: Request, res: Response) => {
@@ -334,6 +340,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       feedbackList,
       absensiList,
       penilaianAkhirList,
+      holidayDates,
     ] =
       resolvedUserIds.length || emailLowerList.length
         ? await Promise.all([
@@ -365,6 +372,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
                         },
                       },
                       latestLogbookDate: { $max: "$date" },
+                      filledDates: { $addToSet: "$date" },
                     },
                   },
                 ])
@@ -395,8 +403,11 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
             })
               .select("user pesertaEmail nilaiRataRata keteranganRataRata tanggalPenilaian")
               .lean(),
+            getHolidayDateSet(),
           ])
-        : [[], [], [], [], []];
+        : [[], [], [], [], [], new Set<string>()];
+
+    const logbookCutoffIso = getMissedCutoffDateWib();
 
     const logbookMap = new Map<string, any>();
     logbookAgg.forEach((item: any) => {
@@ -407,6 +418,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         disetujui: item.disetujui || 0,
         ditolak: item.ditolak || 0,
         latestLogbookDate: item.latestLogbookDate || null,
+        filledDates: Array.isArray(item.filledDates) ? item.filledDates : [],
       });
     });
 
@@ -486,13 +498,38 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       const emailLower = p.email ? p.email.toLowerCase() : "";
       const resolvedUserId =
         p.userId || (emailLower ? emailToUserId.get(emailLower) || null : null);
-      const logbookStats = (resolvedUserId && logbookMap.get(resolvedUserId)) || {
+      const rawLogbookStats = (resolvedUserId && logbookMap.get(resolvedUserId)) || {
         total: 0,
         menunggu: 0,
         revisi: 0,
         disetujui: 0,
         ditolak: 0,
         latestLogbookDate: null,
+        filledDates: [] as string[],
+      };
+
+      const startIso = parseDateIso(p.tanggalMulaiMagang);
+      const endIso = parseDateIso(p.tanggalSelesaiMagang);
+      const capEndIso =
+        endIso && endIso < logbookCutoffIso ? endIso : logbookCutoffIso;
+      const expectedWorkdays =
+        p.statusMagang !== "Tidak Magang" && startIso && capEndIso >= startIso
+          ? getWorkdaysInRange(startIso, capEndIso, holidayDates)
+          : [];
+      const filledSet = new Set<string>(rawLogbookStats.filledDates || []);
+      const missedDates = expectedWorkdays
+        .filter((d) => !filledSet.has(d))
+        .sort((a, b) => b.localeCompare(a));
+
+      const logbookStats = {
+        total: rawLogbookStats.total,
+        menunggu: rawLogbookStats.menunggu,
+        revisi: rawLogbookStats.revisi,
+        disetujui: rawLogbookStats.disetujui,
+        ditolak: rawLogbookStats.ditolak,
+        latestLogbookDate: rawLogbookStats.latestLogbookDate,
+        missedCount: missedDates.length,
+        missedDates,
       };
       const laporanAkhir = (resolvedUserId && laporanMap.get(resolvedUserId)) || null;
       const feedbackStats = (resolvedUserId && feedbackMap.get(resolvedUserId)) || {
@@ -581,6 +618,13 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         (acc, p) => acc + p.logbookStats.disetujui,
         0,
       ),
+      pesertaBelumIsiLogbook: enrichedPeserta.filter(
+        (p) => (p.logbookStats.missedCount ?? 0) > 0,
+      ).length,
+      totalLogbookBelumIsi: enrichedPeserta.reduce(
+        (acc, p) => acc + (p.logbookStats.missedCount ?? 0),
+        0,
+      ),
       laporanAkhirMenunggu: enrichedPeserta.filter(
         (p) => p.laporanAkhir?.status === "Menunggu",
       ).length,
@@ -616,6 +660,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         : null,
       summary,
       peserta: enrichedPeserta,
+      holidayDates: Array.from(holidayDates),
     });
   } catch (err) {
     console.error("[GET MENTOR DASHBOARD SUMMARY]", err);
