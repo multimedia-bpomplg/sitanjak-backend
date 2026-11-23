@@ -28,7 +28,10 @@ function isValidRating(val: unknown): val is number {
   );
 }
 
-function parseAndValidateEvaluasiBody(body: any):
+function parseAndValidateEvaluasiBody(
+  body: any,
+  opts: { requireAlasanBermanfaat?: boolean } = {},
+):
   | {
       data: {
         fasilitator: {
@@ -49,6 +52,7 @@ function parseAndValidateEvaluasiBody(body: any):
           skor4: number;
           skor5: number;
           bermanfaat: "Ya" | "Tidak";
+          alasanBermanfaat: string;
           adaMasukan: "Ya" | "Tidak";
           masukan: string;
         };
@@ -106,6 +110,15 @@ function parseAndValidateEvaluasiBody(body: any):
   }
 
   const bermanfaat = penyelenggara.bermanfaat === "Tidak" ? "Tidak" : "Ya";
+  const pAlasanBermanfaat = String(penyelenggara.alasanBermanfaat || "").trim();
+  if (opts.requireAlasanBermanfaat !== false && !pAlasanBermanfaat) {
+    return {
+      error:
+        bermanfaat === "Ya"
+          ? "Mohon jelaskan manfaat yang diperoleh pada Evaluasi Penyelenggara"
+          : "Mohon jelaskan alasan pada pertanyaan kebermanfaatan Evaluasi Penyelenggara",
+    };
+  }
   const adaMasukan = penyelenggara.adaMasukan === "Tidak" ? "Tidak" : "Ya";
   const pMasukan = String(penyelenggara.masukan || "").trim();
   if (adaMasukan === "Ya" && !pMasukan) {
@@ -162,6 +175,7 @@ function parseAndValidateEvaluasiBody(body: any):
         skor4: pScores[3],
         skor5: pScores[4],
         bermanfaat,
+        alasanBermanfaat: pAlasanBermanfaat,
         adaMasukan,
         masukan: adaMasukan === "Ya" ? pMasukan : "",
       },
@@ -232,7 +246,9 @@ export const upsertMyEvaluasi = async (req: any, res: Response) => {
       }
     }
 
-    const parsed = parseAndValidateEvaluasiBody(req.body);
+    const parsed = parseAndValidateEvaluasiBody(req.body, {
+      requireAlasanBermanfaat: true,
+    });
     if ("error" in parsed) {
       return res.status(400).json({ message: parsed.error });
     }
@@ -546,7 +562,9 @@ export const adminUpdateEvaluasi = async (req: any, res: Response) => {
         .json({ message: "Data evaluasi & surat pernyataan tidak ditemukan" });
     }
 
-    const parsed = parseAndValidateEvaluasiBody(req.body);
+    const parsed = parseAndValidateEvaluasiBody(req.body, {
+      requireAlasanBermanfaat: false,
+    });
     if ("error" in parsed) {
       return res.status(400).json({ message: parsed.error });
     }

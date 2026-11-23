@@ -1,6 +1,26 @@
 import { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
 import Announcement from "../models/Announcement";
 import { AuthRequest } from "../middlewares/auth.middleware";
+
+function removeAnnouncementFile(fileName?: string | null) {
+  if (!fileName) return;
+  const trimmed = String(fileName).trim();
+  if (!trimmed || trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return;
+  }
+  const safeName = path.basename(trimmed);
+  if (!safeName) return;
+  const fullPath = path.join(process.cwd(), "uploads", "announcements", safeName);
+  try {
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  } catch (err) {
+    console.warn("[ANNOUNCEMENT IMAGE CLEANUP WARN]", err);
+  }
+}
 
 /* ================= CREATE ================= */
 export const createAnnouncement = async (req: AuthRequest, res: Response) => {
@@ -21,6 +41,8 @@ export const createAnnouncement = async (req: AuthRequest, res: Response) => {
 
     res.status(201).json(data);
   } catch (err) {
+    removeAnnouncementFile(req.file?.filename);
+    console.error(err);
     res.status(500).json({ message: "Gagal membuat pengumuman" });
   }
 };
@@ -50,17 +72,35 @@ export const getAllAnnouncements = async (_req: Request, res: Response) => {
 
 /* ================= DELETE ================= */
 export const deleteAnnouncement = async (req: Request, res: Response) => {
-  await Announcement.findByIdAndDelete(req.params.id);
+  try {
+    const deleted = await Announcement.findByIdAndDelete(req.params.id);
 
-  res.json({ message: "Deleted" });
+    if (!deleted) {
+      return res.status(404).json({ message: "Pengumuman tidak ditemukan" });
+    }
+
+    removeAnnouncementFile(deleted.image);
+
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal menghapus pengumuman" });
+  }
 };
 
 /* ================= UPDATE ================= */
 export const updateAnnouncement = async (req: AuthRequest, res: Response) => {
+  const newImage = req.file?.filename;
   try {
-    const { title, subtitle, content, type, isActive } = req.body;
+    const existing = await Announcement.findById(req.params.id);
+    if (!existing) {
+      removeAnnouncementFile(newImage);
+      return res.status(404).json({ message: "Pengumuman tidak ditemukan" });
+    }
 
-    const image = req.file?.filename;
+    const { title, subtitle, content, type, isActive, removeImage } = req.body;
+    const shouldRemoveImage = removeImage === "true" || removeImage === true;
+    const previousImage = existing.image;
 
     const updateData: any = {
       title,
@@ -71,9 +111,10 @@ export const updateAnnouncement = async (req: AuthRequest, res: Response) => {
       updatedAt: new Date(),
     };
 
-    // kalau upload gambar baru
-    if (image) {
-      updateData.image = image;
+    if (newImage) {
+      updateData.image = newImage;
+    } else if (shouldRemoveImage) {
+      updateData.image = null;
     }
 
     const updated = await Announcement.findByIdAndUpdate(
@@ -82,12 +123,15 @@ export const updateAnnouncement = async (req: AuthRequest, res: Response) => {
       { new: true },
     );
 
-    if (!updated) {
-      return res.status(404).json({ message: "Pengumuman tidak ditemukan" });
+    if (previousImage && newImage && previousImage !== newImage) {
+      removeAnnouncementFile(previousImage);
+    } else if (previousImage && !newImage && shouldRemoveImage) {
+      removeAnnouncementFile(previousImage);
     }
 
     res.json(updated);
   } catch (err) {
+    removeAnnouncementFile(newImage);
     console.error(err);
     res.status(500).json({ message: "Gagal update pengumuman" });
   }

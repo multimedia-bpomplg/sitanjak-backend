@@ -32,6 +32,7 @@ const EvaluasiMagangSchema = new mongoose.Schema(
       skor4: { type: Number, min: 1, max: 5, required: true },
       skor5: { type: Number, min: 1, max: 5, required: true },
       bermanfaat: { type: String, enum: ["Ya", "Tidak"], default: "Ya" },
+      alasanBermanfaat: { type: String, default: "", trim: true },
       adaMasukan: { type: String, enum: ["Ya", "Tidak"], default: "Ya" },
       masukan: { type: String, default: "", trim: true },
     },
