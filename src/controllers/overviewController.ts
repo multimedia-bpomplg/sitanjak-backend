@@ -530,11 +530,136 @@ export const getDetailedTimeSeries = async (req: Request, res: Response) => {
       },
     ]);
 
-    // Generate data untuk setiap hari - HANYA hari yang ada data
-    const daysInMonth = getDaysInMonthFromDateFns(startDate); // GUNAKAN FUNGSI YANG SUDAH DI-RENAME
-    const formattedData = [];
+    const [mentorRole, adminRole] = await Promise.all([
+      Role.findOne({ name: "mentor" }),
+      Role.findOne({ name: "admin" }),
+    ]);
 
-    for (let day = 1; day <= daysInMonth; day++) {
+    const [
+      basePesertaRes,
+      dailyPeserta,
+      baseMentorCount,
+      dailyMentor,
+      baseAdminCount,
+      dailyAdmin,
+    ] = await Promise.all([
+      Pendaftaran.aggregate([
+        {
+          $match: {
+            status: "Disetujui",
+            createdAt: { $lt: startDate },
+          },
+        },
+        { $unwind: "$peserta" },
+        { $count: "total" },
+      ]),
+      Pendaftaran.aggregate([
+        {
+          $match: {
+            status: "Disetujui",
+            createdAt: { $gte: startDate, $lte: endDate },
+          },
+        },
+        { $unwind: "$peserta" },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$createdAt",
+                timezone: "Asia/Jakarta",
+              },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      mentorRole
+        ? User.countDocuments({
+            roles: mentorRole._id,
+            status: "Aktif",
+            createdAt: { $lt: startDate },
+          })
+        : Promise.resolve(0),
+      mentorRole
+        ? User.aggregate([
+            {
+              $match: {
+                roles: mentorRole._id,
+                status: "Aktif",
+                createdAt: { $gte: startDate, $lte: endDate },
+              },
+            },
+            {
+              $group: {
+                _id: {
+                  $dateToString: {
+                    format: "%Y-%m-%d",
+                    date: "$createdAt",
+                    timezone: "Asia/Jakarta",
+                  },
+                },
+                count: { $sum: 1 },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ])
+        : Promise.resolve([]),
+      adminRole
+        ? User.countDocuments({
+            roles: adminRole._id,
+            status: "Aktif",
+            createdAt: { $lt: startDate },
+          })
+        : Promise.resolve(0),
+      adminRole
+        ? User.aggregate([
+            {
+              $match: {
+                roles: adminRole._id,
+                status: "Aktif",
+                createdAt: { $gte: startDate, $lte: endDate },
+              },
+            },
+            {
+              $group: {
+                _id: {
+                  $dateToString: {
+                    format: "%Y-%m-%d",
+                    date: "$createdAt",
+                    timezone: "Asia/Jakarta",
+                  },
+                },
+                count: { $sum: 1 },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ])
+        : Promise.resolve([]),
+    ]);
+
+    const { todayStr } = getTodayWibBounds();
+    const [nowYear, nowMonth, nowDay] = todayStr.split("-").map(Number);
+
+    // Generate data untuk setiap hari sampai batas hari yang sudah berjalan
+    const daysInMonth = getDaysInMonthFromDateFns(startDate); // GUNAKAN FUNGSI YANG SUDAH DI-RENAME
+    let effectiveDays = daysInMonth;
+    if (
+      selectedYear > nowYear ||
+      (selectedYear === nowYear && selectedMonth > nowMonth)
+    ) {
+      effectiveDays = 0;
+    } else if (selectedYear === nowYear && selectedMonth === nowMonth) {
+      effectiveDays = Math.min(daysInMonth, nowDay);
+    }
+
+    const formattedData = [];
+    let cumulativePeserta = basePesertaRes[0]?.total || 0;
+    let cumulativeMentor = baseMentorCount || 0;
+    let cumulativeAdmin = baseAdminCount || 0;
+
+    for (let day = 1; day <= effectiveDays; day++) {
       const date = new Date(selectedYear, selectedMonth - 1, day);
       const dateStr = format(date, "yyyy-MM-dd");
 
@@ -543,17 +668,30 @@ export const getDetailedTimeSeries = async (req: Request, res: Response) => {
         (item) => item._id === dateStr,
       );
       const logbookToday = dailyLogbook.find((item) => item._id === dateStr);
+      const pesertaToday = dailyPeserta.find((item) => item._id === dateStr);
+      const mentorToday = dailyMentor.find((item) => item._id === dateStr);
+      const adminToday = dailyAdmin.find((item) => item._id === dateStr);
 
-      // Hanya tambahkan jika ada data
-      if (pendaftaranToday?.count || logbookToday?.count) {
+      if (pesertaToday?.count) cumulativePeserta += pesertaToday.count;
+      if (mentorToday?.count) cumulativeMentor += mentorToday.count;
+      if (adminToday?.count) cumulativeAdmin += adminToday.count;
+
+      // Tambahkan jika ada aktivitas harian atau akun aktif kumulatif
+      if (
+        pendaftaranToday?.count ||
+        logbookToday?.count ||
+        cumulativePeserta > 0 ||
+        cumulativeMentor > 0 ||
+        cumulativeAdmin > 0
+      ) {
         formattedData.push({
           date: dateStr,
           day: day,
           pendaftaran: pendaftaranToday?.count || 0,
           logbook: logbookToday?.count || 0,
-          peserta_aktif: 0, // Tidak dihitung untuk daily view
-          mentor_aktif: 0,
-          admin_aktif: 0,
+          peserta_aktif: cumulativePeserta,
+          mentor_aktif: cumulativeMentor,
+          admin_aktif: cumulativeAdmin,
         });
       }
     }
@@ -568,14 +706,65 @@ export const getDetailedTimeSeries = async (req: Request, res: Response) => {
   }
 };
 
+const buildPendaftaranDateMatch = (
+  yearQuery: unknown,
+  monthQuery: unknown,
+): Record<string, unknown> => {
+  const yearNum =
+    yearQuery && yearQuery !== "all" ? parseInt(String(yearQuery), 10) : NaN;
+  const monthNum =
+    monthQuery && monthQuery !== "all" ? parseInt(String(monthQuery), 10) : NaN;
+
+  const hasValidYear = !Number.isNaN(yearNum) && yearNum > 1970;
+  const hasValidMonth =
+    !Number.isNaN(monthNum) && monthNum >= 1 && monthNum <= 12;
+
+  if (hasValidYear && hasValidMonth) {
+    return {
+      createdAt: {
+        $gte: new Date(yearNum, monthNum - 1, 1),
+        $lte: new Date(yearNum, monthNum, 0, 23, 59, 59, 999),
+      },
+    };
+  }
+
+  if (hasValidYear) {
+    return {
+      createdAt: {
+        $gte: new Date(yearNum, 0, 1),
+        $lte: new Date(yearNum, 11, 31, 23, 59, 59, 999),
+      },
+    };
+  }
+
+  if (hasValidMonth) {
+    return {
+      $expr: {
+        $eq: [
+          { $month: { date: "$createdAt", timezone: "Asia/Jakarta" } },
+          monthNum,
+        ],
+      },
+    };
+  }
+
+  return {};
+};
+
 /* ================= GET STATISTIK POSISI ================= */
 export const getStatistikPosisi = async (req: Request, res: Response) => {
   try {
+    const dateMatch = buildPendaftaranDateMatch(req.query.year, req.query.month);
     const posisiAggregation = await Pendaftaran.aggregate([
-      { $unwind: "$peserta" },
       {
         $match: {
           status: "Disetujui",
+          ...dateMatch,
+        },
+      },
+      { $unwind: "$peserta" },
+      {
+        $match: {
           "peserta.posisi": { $exists: true, $nin: [null, ""] },
         },
       },
@@ -598,11 +787,17 @@ export const getStatistikPosisi = async (req: Request, res: Response) => {
 /* ================= GET STATISTIK ASAL ================= */
 export const getStatistikAsal = async (req: Request, res: Response) => {
   try {
+    const dateMatch = buildPendaftaranDateMatch(req.query.year, req.query.month);
     const asalAggregation = await Pendaftaran.aggregate([
-      { $unwind: "$peserta" },
       {
         $match: {
           status: "Disetujui",
+          ...dateMatch,
+        },
+      },
+      { $unwind: "$peserta" },
+      {
+        $match: {
           "peserta.asal.jenis": { $exists: true, $nin: [null, ""] },
         },
       },
@@ -622,11 +817,17 @@ export const getStatistikAsal = async (req: Request, res: Response) => {
 /* ================= GET STATISTIK GENDER ================= */
 export const getStatistikGender = async (req: Request, res: Response) => {
   try {
+    const dateMatch = buildPendaftaranDateMatch(req.query.year, req.query.month);
     const genderAggregation = await Pendaftaran.aggregate([
-      { $unwind: "$peserta" },
       {
         $match: {
           status: "Disetujui",
+          ...dateMatch,
+        },
+      },
+      { $unwind: "$peserta" },
+      {
+        $match: {
           "peserta.jenisKelamin": { $exists: true, $nin: [null, ""] },
         },
       },
@@ -646,12 +847,26 @@ export const getStatistikGender = async (req: Request, res: Response) => {
 /* ================= GET STATISTIK SELESAI ================= */
 export const getStatistikSelesai = async (req: Request, res: Response) => {
   try {
-    const currentDate = new Date();
+    const dateMatch = buildPendaftaranDateMatch(req.query.year, req.query.month);
+    const yearNum =
+      req.query.year && req.query.year !== "all"
+        ? parseInt(String(req.query.year), 10)
+        : NaN;
+    const targetYear =
+      !Number.isNaN(yearNum) && yearNum > 1970
+        ? yearNum
+        : new Date().getFullYear();
+
     const selesaiAggregation = await Pendaftaran.aggregate([
-      { $unwind: "$peserta" },
       {
         $match: {
           status: "Disetujui",
+          ...dateMatch,
+        },
+      },
+      { $unwind: "$peserta" },
+      {
+        $match: {
           "peserta.tanggalSelesaiMagang": {
             $exists: true,
             $nin: [null, ""],
@@ -683,11 +898,11 @@ export const getStatistikSelesai = async (req: Request, res: Response) => {
         $bucket: {
           groupBy: "$selesaiDate",
           boundaries: [
-            new Date(currentDate.getFullYear(), 0, 1),
-            new Date(currentDate.getFullYear(), 3, 1),
-            new Date(currentDate.getFullYear(), 6, 1),
-            new Date(currentDate.getFullYear(), 9, 1),
-            new Date(currentDate.getFullYear() + 1, 0, 1),
+            new Date(targetYear, 0, 1),
+            new Date(targetYear, 3, 1),
+            new Date(targetYear, 6, 1),
+            new Date(targetYear, 9, 1),
+            new Date(targetYear + 1, 0, 1),
           ],
           default: "Lainnya",
           output: {
@@ -702,25 +917,25 @@ export const getStatistikSelesai = async (req: Request, res: Response) => {
               branches: [
                 {
                   case: {
-                    $eq: ["$_id", new Date(currentDate.getFullYear(), 0, 1)],
+                    $eq: ["$_id", new Date(targetYear, 0, 1)],
                   },
                   then: "Q1 (Jan-Mar)",
                 },
                 {
                   case: {
-                    $eq: ["$_id", new Date(currentDate.getFullYear(), 3, 1)],
+                    $eq: ["$_id", new Date(targetYear, 3, 1)],
                   },
                   then: "Q2 (Apr-Jun)",
                 },
                 {
                   case: {
-                    $eq: ["$_id", new Date(currentDate.getFullYear(), 6, 1)],
+                    $eq: ["$_id", new Date(targetYear, 6, 1)],
                   },
                   then: "Q3 (Jul-Sep)",
                 },
                 {
                   case: {
-                    $eq: ["$_id", new Date(currentDate.getFullYear(), 9, 1)],
+                    $eq: ["$_id", new Date(targetYear, 9, 1)],
                   },
                   then: "Q4 (Okt-Des)",
                 },
