@@ -19,9 +19,9 @@ import {
 
 // Koordinat Kantor Balai Besar POM di Palembang (Jl. Pangeran Ratu, 5 Ulu, Seberang Ulu I, Palembang)
 const BBPOM_PALEMBANG_COORD = {
-  lat: -3.012694,
-  lng: 104.774716,
-  radiusMeters: 400,
+  lat: -3.0220638,
+  lng: 104.7736571,
+  radiusMeters: 200,
 };
 
 /* ================= HELPERS ================= */
