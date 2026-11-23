@@ -5,11 +5,23 @@ import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import LaporanAkhir from "../models/LaporanAkhir";
 import Absensi from "../models/Absensi";
-import { calculateFinalAttendanceScore } from "../utils/absensiScoring";
+import {
+  calculateFinalAttendanceScore,
+  getPenilaianAkhirSchedule,
+} from "../utils/absensiScoring";
 import { createNotification } from "../services/notificationService";
 import { getHolidayDateSet } from "../services/holidayService";
 
 /* ================= HELPERS ================= */
+
+function formatIsoIndo(dateIso: string): string {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -355,6 +367,12 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
         };
       }
 
+      const ratingSchedule = getPenilaianAkhirSchedule(
+        p.tanggalMulaiMagang,
+        p.tanggalSelesaiMagang,
+        p.statusMagang,
+      );
+
       return {
         userId: uid,
         nama: p.nama,
@@ -370,6 +388,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
         laporanStatus: uid ? laporanByUserId.get(uid) || null : null,
         absensiRef: absInfo,
         penilaianAkhir: pen,
+        ratingSchedule,
       };
     });
 
@@ -384,6 +403,12 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
         totalPeserta: items.length,
         sudahDinilai: dinilaiItems.length,
         belumDinilai: items.length - dinilaiItems.length,
+        siapDinilai: items.filter(
+          (i) => !i.penilaianAkhir && i.ratingSchedule.canRate,
+        ).length,
+        belumWaktunya: items.filter(
+          (i) => !i.penilaianAkhir && i.ratingSchedule.reason === "too_early",
+        ).length,
         rataRataNilai:
           dinilaiItems.length > 0
             ? Number((avgNilaiSum / dinilaiItems.length).toFixed(2))
@@ -460,6 +485,25 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
       return res.status(403).json({
         message:
           "Anda tidak memiliki akses untuk menilai peserta yang bukan bimbingan Anda.",
+      });
+    }
+
+    const ratingSchedule = getPenilaianAkhirSchedule(
+      matchedMentee?.tanggalMulaiMagang,
+      matchedMentee?.tanggalSelesaiMagang,
+      matchedMentee?.statusMagang,
+    );
+
+    if (ratingSchedule.reason === "inactive") {
+      return res.status(403).json({
+        message:
+          "Peserta berstatus Tidak Magang sehingga penilaian akhir tidak dapat diisi.",
+      });
+    }
+
+    if (!ratingSchedule.canRate && ratingSchedule.openDateIso) {
+      return res.status(403).json({
+        message: `Pengisian Penilaian Akhir Magang hanya dibuka mulai H-3 sebelum selesai magang (${formatIsoIndo(ratingSchedule.openDateIso)}).`,
       });
     }
 

@@ -240,6 +240,79 @@ export function getHMinus3CutoffIso(
   return { startIso, cutoffEndIso };
 }
 
+export type PenilaianScheduleStatus = {
+  canRate: boolean;
+  reason: "ok" | "too_early" | "inactive";
+  openDateIso: string | null;
+  todayIso: string;
+  daysUntilOpen: number;
+};
+
+/**
+ * Menentukan apakah mentor sudah boleh mengisi Penilaian Akhir Magang untuk peserta:
+ * hanya dibuka mulai H-3 sebelum tanggal selesai magang (WIB).
+ */
+export function getPenilaianAkhirSchedule(
+  tanggalMulaiMagang?: string | null,
+  tanggalSelesaiMagang?: string | null,
+  statusMagang?: string | null,
+  now: Date = new Date(),
+): PenilaianScheduleStatus {
+  const todayIso = toIsoDate(toWibDate(now));
+
+  if (statusMagang === "Tidak Magang") {
+    return {
+      canRate: false,
+      reason: "inactive",
+      openDateIso: null,
+      todayIso,
+      daysUntilOpen: 0,
+    };
+  }
+
+  const { cutoffEndIso } = getHMinus3CutoffIso(
+    tanggalMulaiMagang,
+    tanggalSelesaiMagang,
+  );
+
+  if (!cutoffEndIso) {
+    return {
+      canRate: true,
+      reason: "ok",
+      openDateIso: null,
+      todayIso,
+      daysUntilOpen: 0,
+    };
+  }
+
+  if (todayIso < cutoffEndIso) {
+    const [fy, fm, fd] = todayIso.split("-").map(Number);
+    const [ty, tm, td] = cutoffEndIso.split("-").map(Number);
+    const daysUntilOpen = Math.max(
+      0,
+      Math.round(
+        (Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) /
+          (24 * 60 * 60 * 1000),
+      ),
+    );
+    return {
+      canRate: false,
+      reason: "too_early",
+      openDateIso: cutoffEndIso,
+      todayIso,
+      daysUntilOpen,
+    };
+  }
+
+  return {
+    canRate: true,
+    reason: "ok",
+    openDateIso: cutoffEndIso,
+    todayIso,
+    daysUntilOpen: 0,
+  };
+}
+
 /**
  * Menghasilkan daftar seluruh hari kerja (Senin-Jumat di luar hari libur nasional) dari tanggalMulaiMagang
  * sampai dengan H-3 sebelum tanggalSelesaiMagang.

@@ -16,6 +16,7 @@ import { resolveKategoriMagang } from "../utils/pesertaKategori";
 import { getHolidayDateSet } from "../services/holidayService";
 import {
   getMissedCutoffDateWib,
+  getPenilaianAkhirSchedule,
   getWorkdaysInRange,
   parseDateIso,
 } from "../utils/absensiScoring";
@@ -576,6 +577,11 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         (resolvedUserId && penilaianMap.get(resolvedUserId)) ||
         (emailLower && penilaianMap.get(emailLower)) ||
         null;
+      const penilaianSchedule = getPenilaianAkhirSchedule(
+        p.tanggalMulaiMagang,
+        p.tanggalSelesaiMagang,
+        p.statusMagang,
+      );
       const evaluasi =
         (resolvedUserId && evaluasiByKey.get(resolvedUserId)) ||
         (emailLower && evaluasiByKey.get(emailLower)) ||
@@ -591,6 +597,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         feedbackStats,
         absensiStats,
         penilaianAkhir,
+        penilaianSchedule,
         evaluasi,
       };
     });
@@ -675,6 +682,12 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       penilaianAkhirSudah,
       penilaianAkhirBelum,
       penilaianAkhirRataRata,
+      penilaianSiapDinilai: enrichedPeserta.filter(
+        (p) => !p.penilaianAkhir && p.penilaianSchedule.canRate,
+      ).length,
+      penilaianBelumWaktunya: enrichedPeserta.filter(
+        (p) => !p.penilaianAkhir && p.penilaianSchedule.reason === "too_early",
+      ).length,
       evaluasiMenunggu: enrichedPeserta.filter(
         (p) => p.evaluasi?.status === "Menunggu",
       ).length,
