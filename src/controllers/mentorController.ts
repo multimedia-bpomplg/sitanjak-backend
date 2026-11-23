@@ -11,6 +11,7 @@ import LaporanAkhir from "../models/LaporanAkhir";
 import Feedback from "../models/Feedback";
 import Absensi from "../models/Absensi";
 import PenilaianAkhir from "../models/PenilaianAkhir";
+import EvaluasiMagang from "../models/EvaluasiMagang";
 import { resolveKategoriMagang } from "../utils/pesertaKategori";
 import { getHolidayDateSet } from "../services/holidayService";
 import {
@@ -340,6 +341,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       feedbackList,
       absensiList,
       penilaianAkhirList,
+      evaluasiList,
       holidayDates,
     ] =
       resolvedUserIds.length || emailLowerList.length
@@ -403,9 +405,17 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
             })
               .select("user pesertaEmail nilaiRataRata keteranganRataRata tanggalPenilaian")
               .lean(),
+            EvaluasiMagang.find({
+              $or: [
+                ...(resolvedUserIds.length ? [{ user: { $in: resolvedUserIds } }] : []),
+                ...(emailLowerList.length ? [{ email: { $in: emailLowerList } }] : []),
+              ],
+            })
+              .select("user email status submittedAt reviewedAt createdAt")
+              .lean(),
             getHolidayDateSet(),
           ])
-        : [[], [], [], [], [], new Set<string>()];
+        : [[], [], [], [], [], [], new Set<string>()];
 
     const logbookCutoffIso = getMissedCutoffDateWib();
 
@@ -494,6 +504,18 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         penilaianMap.set(pen.pesertaEmail.toLowerCase(), mapped);
     });
 
+    const evaluasiByKey = new Map<string, any>();
+    evaluasiList.forEach((ev: any) => {
+      const mapped = {
+        _id: ev._id.toString(),
+        status: ev.status || "Menunggu",
+        submittedAt: ev.submittedAt || ev.createdAt || null,
+        reviewedAt: ev.reviewedAt || null,
+      };
+      if (ev.user) evaluasiByKey.set(ev.user.toString(), mapped);
+      if (ev.email) evaluasiByKey.set(String(ev.email).toLowerCase(), mapped);
+    });
+
     const enrichedPeserta = pesertaRecords.map((p) => {
       const emailLower = p.email ? p.email.toLowerCase() : "";
       const resolvedUserId =
@@ -554,6 +576,10 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         (resolvedUserId && penilaianMap.get(resolvedUserId)) ||
         (emailLower && penilaianMap.get(emailLower)) ||
         null;
+      const evaluasi =
+        (resolvedUserId && evaluasiByKey.get(resolvedUserId)) ||
+        (emailLower && evaluasiByKey.get(emailLower)) ||
+        null;
       const phase = resolveInternshipPhase(p, todayIso);
 
       return {
@@ -565,6 +591,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         feedbackStats,
         absensiStats,
         penilaianAkhir,
+        evaluasi,
       };
     });
 
@@ -648,6 +675,16 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       penilaianAkhirSudah,
       penilaianAkhirBelum,
       penilaianAkhirRataRata,
+      evaluasiMenunggu: enrichedPeserta.filter(
+        (p) => p.evaluasi?.status === "Menunggu",
+      ).length,
+      evaluasiRevisi: enrichedPeserta.filter(
+        (p) => p.evaluasi?.status === "Revisi",
+      ).length,
+      evaluasiDisetujui: enrichedPeserta.filter(
+        (p) => p.evaluasi?.status === "Disetujui",
+      ).length,
+      evaluasiBelumMengisi: enrichedPeserta.filter((p) => !p.evaluasi).length,
     };
 
     res.json({
