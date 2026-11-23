@@ -1,38 +1,49 @@
 import cron from "node-cron";
 import User from "../models/User";
 import Pendaftaran from "../models/pendaftaran";
+import {
+  cleanupAbsensiPhotosForInactivePeserta,
+  cleanupPendaftaranFilesForInactivePeserta,
+} from "../services/absensiCleanupService";
 
-/*
-CRON BERJALAN SETIAP HARI JAM 00:00
-*/
-export const autoNonaktifPeserta = () => {
-  cron.schedule("0 0 * * *", async () => {
-    console.log("🔎 Cron Auto Nonaktif Peserta berjalan...");
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-    const today = new Date();
+export async function runAutoNonaktifPeserta() {
+  console.log("🔎 Cron Auto Nonaktif Peserta berjalan...");
 
-    try {
-      const pendaftaran = await Pendaftaran.find({
-        status: "Disetujui",
-      });
+  const today = new Date();
 
-      for (const data of pendaftaran) {
-        for (const peserta of data.peserta) {
-          if (peserta.statusMagang === "Selesai Magang") {
-            const selesai = new Date(peserta.tanggalSelesaiMagang);
+  try {
+    const pendaftaran = await Pendaftaran.find({
+      status: "Disetujui",
+    });
 
-            const diffTime = today.getTime() - selesai.getTime();
-            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    for (const data of pendaftaran) {
+      for (const peserta of data.peserta) {
+        if (peserta.statusMagang === "Selesai Magang") {
+          const selesai = new Date(peserta.tanggalSelesaiMagang);
+          if (Number.isNaN(selesai.getTime())) continue;
 
-            /*
-            jika lebih dari 7 hari
-            */
-            if (diffDays >= 7) {
-              await User.updateOne(
-                { email: peserta.email },
-                { status: "Nonaktif" },
-              );
+          const diffTime = today.getTime() - selesai.getTime();
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
 
+          /*
+          jika lebih dari 7 hari
+          */
+          if (diffDays >= 7 && peserta.email) {
+            const cleanEmail = peserta.email.trim();
+            const updatedUser = await User.findOneAndUpdate(
+              {
+                email: new RegExp(`^${escapeRegex(cleanEmail)}$`, "i"),
+                status: { $ne: "Nonaktif" },
+              },
+              { status: "Nonaktif" },
+              { new: true },
+            );
+
+            if (updatedUser) {
               console.log(
                 `⚠️ Akun peserta ${peserta.email} dinonaktifkan otomatis`,
               );
@@ -40,8 +51,32 @@ export const autoNonaktifPeserta = () => {
           }
         }
       }
-    } catch (error) {
-      console.error("❌ Cron auto nonaktif error:", error);
     }
-  });
+
+    // Bersihkan foto absensi serta surat pengantar & surat balasan milik akun peserta Nonaktif (baru maupun lama)
+    const [absensiCleanup, suratCleanup] = await Promise.all([
+      cleanupAbsensiPhotosForInactivePeserta(),
+      cleanupPendaftaranFilesForInactivePeserta(),
+    ]);
+    if (absensiCleanup.filesDeleted > 0 || absensiCleanup.recordsCleared > 0) {
+      console.log(
+        `🧹 Cleanup foto absensi peserta nonaktif: ${absensiCleanup.filesDeleted} file dihapus (${absensiCleanup.recordsCleared} entri absensi dibersihkan)`,
+      );
+    }
+    if (suratCleanup.filesDeleted > 0 || suratCleanup.docsCleared > 0) {
+      console.log(
+        `🧹 Cleanup surat pengantar/balasan peserta nonaktif: ${suratCleanup.filesDeleted} file dihapus (${suratCleanup.docsCleared} pendaftaran dibersihkan)`,
+      );
+    }
+  } catch (error) {
+    console.error("❌ Cron auto nonaktif error:", error);
+  }
+}
+
+/*
+CRON BERJALAN SETIAP HARI JAM 00:00
+*/
+export const autoNonaktifPeserta = () => {
+  cron.schedule("0 0 * * *", runAutoNonaktifPeserta);
+  void runAutoNonaktifPeserta();
 };

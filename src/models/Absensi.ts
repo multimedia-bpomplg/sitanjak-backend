@@ -64,7 +64,7 @@ const AbsensiEntrySchema = new Schema<IAbsensiEntry>(
   {
     time: { type: Date, required: true },
     timeWIB: { type: String, required: true },
-    photoPath: { type: String, required: true },
+    photoPath: { type: String, default: "" },
     location: { type: AbsensiLocationSchema, required: true },
     timeStatus: {
       type: String,

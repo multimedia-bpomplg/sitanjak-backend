@@ -7,6 +7,10 @@ import { isStrongPassword } from "../utils/generatePassword";
 import { sendEmail } from "../utils/sendEmail";
 import { pesertaEmailTemplate } from "../utils/emailTemplate";
 import { resolveKategoriMagang } from "../utils/pesertaKategori";
+import {
+  cleanupAbsensiPhotosForUser,
+  cleanupPendaftaranFilesForUser,
+} from "../services/absensiCleanupService";
 import jwt from "jsonwebtoken";
 
 /* ================= CREATE AKUN PESERTA + EMAIL ================= */
@@ -154,12 +158,32 @@ export const getPeserta = async (req: Request, res: Response) => {
 /* ================= NONAKTIFKAN PESERTA ================= */
 export const nonaktifkanPeserta = async (req: Request, res: Response) => {
   try {
-    await User.findByIdAndUpdate(req.params.id, {
-      status: "Nonaktif",
-    });
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { status: "Nonaktif" },
+      { new: true },
+    )
+      .select("_id email")
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: "Akun peserta tidak ditemukan" });
+    }
+
+    await Promise.all([
+      cleanupAbsensiPhotosForUser({
+        userId: user._id,
+        email: user.email,
+      }),
+      cleanupPendaftaranFilesForUser({
+        userId: user._id,
+        email: user.email,
+      }),
+    ]);
 
     res.json({ message: "Akun berhasil dinonaktifkan" });
   } catch (error) {
+    console.error("[NONAKTIFKAN PESERTA]", error);
     res.status(500).json({ message: "Gagal menonaktifkan akun" });
   }
 };

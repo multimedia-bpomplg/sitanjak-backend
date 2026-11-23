@@ -176,15 +176,31 @@ export const downloadSertifikat = async (req: any, res: Response) => {
     }
 
     if (!isAdminOrSuper) {
-      const [laporan, feedback] = await Promise.all([
+      const [laporan, feedbackList] = await Promise.all([
         LaporanAkhir.findOne({ user: userId }),
-        Feedback.findOne({ user: userId }),
+        Feedback.find({ user: userId }).select("status mentorResponse").lean(),
       ]);
 
-      if (!laporan || laporan.status !== "Disetujui" || !feedback) {
+      const hasFeedback = feedbackList.length > 0;
+      const isFeedbackResponded = feedbackList.some(
+        (fb: any) =>
+          fb.status === "Direspon" ||
+          Boolean(fb.mentorResponse && String(fb.mentorResponse).trim()),
+      );
+
+      if (
+        !laporan ||
+        laporan.status !== "Disetujui" ||
+        !hasFeedback ||
+        !isFeedbackResponded
+      ) {
         return res.status(403).json({
           message:
-            "Sertifikat Magang hanya dapat diunduh setelah Laporan Akhir disetujui dan Survei/Feedback selesai diisi.",
+            !laporan || laporan.status !== "Disetujui"
+              ? "Sertifikat Magang hanya dapat diakses setelah Laporan Akhir disetujui oleh Mentor."
+              : !hasFeedback
+                ? "Sertifikat Magang hanya dapat diakses setelah Survei & Feedback diisi dan direspon oleh Mentor."
+                : "Sertifikat Magang hanya dapat diakses setelah Survei & Feedback Anda direspon oleh Mentor.",
         });
       }
     }

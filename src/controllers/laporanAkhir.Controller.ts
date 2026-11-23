@@ -388,7 +388,7 @@ export const updateStatusDanPenilaian = async (req: any, res: Response) => {
       updateData.approvedByMentor = mentorId;
       updateData.approvedAt = new Date();
 
-      // Validasi penilaian
+      // Validasi penilaian (opsional: hanya divalidasi bila dikirim)
       if (penilaian) {
         const requiredFields = [
           "kehadiranDisiplin",
@@ -416,10 +416,6 @@ export const updateStatusDanPenilaian = async (req: any, res: Response) => {
         }
 
         updateData.penilaian = penilaian;
-      } else {
-        return res.status(400).json({
-          message: "Penilaian wajib diisi untuk menyetujui laporan",
-        });
       }
     }
 
