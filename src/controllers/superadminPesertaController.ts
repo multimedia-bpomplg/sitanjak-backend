@@ -22,6 +22,20 @@ export const getPesertaDisetujui = async (req: any, res: Response) => {
         wa: p.wa,
         posisi: p.posisi,
         jurusan: p.jurusan,
+        asal: p.asal
+          ? {
+              jenis: p.asal.jenis || "",
+              nama: p.asal.nama || "",
+            }
+          : null,
+        jenisKelamin: p.jenisKelamin,
+        tempatLahir: p.tempatLahir,
+        tanggalLahir: p.tanggalLahir,
+        provinsi: p.provinsi,
+        kota: p.kota,
+        kecamatan: p.kecamatan,
+        kelurahan: p.kelurahan,
+        alamatLengkap: p.alamatLengkap,
         kategoriMagang: resolveKategoriMagang(p.jurusan, p.kategoriMagang),
         kategori: pendaftaran.kategori,
         mentor: p.mentor,

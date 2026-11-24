@@ -2,21 +2,62 @@
 import { Request, Response } from "express";
 import fs from "fs";
 import LaporanAkhir from "../models/LaporanAkhir";
+import Pendaftaran from "../models/pendaftaran";
 
-/* ================= GET ALL LAPORAN AKHIR (SUPERADMIN) ================= */
+/* ================= GET ALL LAPORAN AKHIR (SUPERADMIN & ADMIN) ================= */
 export const getAllLaporanAkhir = async (req: any, res: Response) => {
   try {
-    const laporanList = await LaporanAkhir.find()
-      .populate("user", "name email")
-      .populate("approvedByMentor", "name email")
-      .sort({ createdAt: -1 });
+    const [laporanList, pendaftaranList] = await Promise.all([
+      LaporanAkhir.find()
+        .populate("user", "name email")
+        .populate("approvedByMentor", "name email")
+        .sort({ createdAt: -1 }),
+      Pendaftaran.find({ status: "Disetujui" })
+        .select("peserta.user peserta.email peserta.mentor")
+        .populate("peserta.mentor", "name email")
+        .lean(),
+    ]);
 
-    // Tambahkan fileUrl untuk akses di frontend
+    const mentorByUserId = new Map<
+      string,
+      { _id: string; name: string; email?: string }
+    >();
+    const mentorByEmail = new Map<
+      string,
+      { _id: string; name: string; email?: string }
+    >();
+
+    for (const pendaftaran of pendaftaranList as any[]) {
+      for (const ps of pendaftaran.peserta || []) {
+        if (!ps?.mentor?.name) continue;
+        const mentorInfo = {
+          _id: ps.mentor._id?.toString() || "",
+          name: ps.mentor.name,
+          email: ps.mentor.email || "",
+        };
+        if (ps.user) mentorByUserId.set(ps.user.toString(), mentorInfo);
+        if (ps.email) {
+          mentorByEmail.set(String(ps.email).trim().toLowerCase(), mentorInfo);
+        }
+      }
+    }
+
+    // Tambahkan fileUrl & mentor pembimbing untuk akses & filter di frontend
     const laporanWithUrl = laporanList.map((laporan) => {
-      const laporanObj = laporan.toObject();
+      const laporanObj: any = laporan.toObject();
+      const userId = laporanObj.user?._id?.toString() || "";
+      const userEmail = String(laporanObj.user?.email || "")
+        .trim()
+        .toLowerCase();
+      const assignedMentor =
+        (userId && mentorByUserId.get(userId)) ||
+        (userEmail && mentorByEmail.get(userEmail)) ||
+        null;
+
       return {
         ...laporanObj,
         fileUrl: laporan.filePdf, // path file untuk akses
+        mentor: assignedMentor || laporanObj.approvedByMentor || null,
       };
     });
 
