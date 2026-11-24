@@ -1,16 +1,71 @@
 // D:\Projek BPOM\backend-bpom\src\controllers\superadminFeedbackController.ts
 import { Request, Response } from "express";
 import Feedback from "../models/Feedback";
+import Pendaftaran from "../models/pendaftaran";
+
+type MentorInfo = {
+  _id: string;
+  name: string;
+  email: string;
+};
+
+async function buildPesertaMentorMaps() {
+  const pendaftaranList = await Pendaftaran.find({ status: "Disetujui" })
+    .select("peserta.user peserta.email peserta.mentor")
+    .populate("peserta.mentor", "name email")
+    .lean();
+
+  const mentorByUserId = new Map<string, MentorInfo>();
+  const mentorByEmail = new Map<string, MentorInfo>();
+
+  for (const pendaftaran of pendaftaranList as any[]) {
+    for (const ps of pendaftaran.peserta || []) {
+      if (!ps?.mentor?.name) continue;
+      const mentorInfo: MentorInfo = {
+        _id: ps.mentor._id?.toString() || "",
+        name: ps.mentor.name,
+        email: ps.mentor.email || "",
+      };
+      if (ps.user) mentorByUserId.set(ps.user.toString(), mentorInfo);
+      if (ps.email) {
+        mentorByEmail.set(String(ps.email).trim().toLowerCase(), mentorInfo);
+      }
+    }
+  }
+
+  return { mentorByUserId, mentorByEmail };
+}
 
 /* ================= GET ALL FEEDBACK (SUPERADMIN) ================= */
 export const getAllFeedback = async (req: any, res: Response) => {
   try {
-    const feedbackList = await Feedback.find()
-      .populate("user", "name email")
-      .populate("mentorRespondedBy", "name email")
-      .sort({ createdAt: -1 });
+    const [feedbackList, { mentorByUserId, mentorByEmail }] = await Promise.all([
+      Feedback.find()
+        .populate("user", "name email")
+        .populate("mentorRespondedBy", "name email")
+        .sort({ createdAt: -1 }),
+      buildPesertaMentorMaps(),
+    ]);
 
-    res.json(feedbackList);
+    const enriched = feedbackList.map((fb) => {
+      const fbObj: any = fb.toObject();
+      const userId = fbObj.user?._id?.toString() || "";
+      const userEmail = String(fbObj.user?.email || "")
+        .trim()
+        .toLowerCase();
+      const assignedMentor =
+        (userId && mentorByUserId.get(userId)) ||
+        (userEmail && mentorByEmail.get(userEmail)) ||
+        fbObj.mentorRespondedBy ||
+        null;
+
+      return {
+        ...fbObj,
+        mentor: assignedMentor,
+      };
+    });
+
+    res.json(enriched);
   } catch (err) {
     console.error("[GET ALL FEEDBACK]", err);
     res.status(500).json({ message: "Gagal mengambil data feedback" });
@@ -93,7 +148,12 @@ export const getFeedbackDetail = async (req: any, res: Response) => {
 /* ================= GET PESERTA FEEDBACK SUMMARY ================= */
 export const getPesertaFeedbackSummary = async (req: any, res: Response) => {
   try {
-    const feedbackList = await Feedback.find().populate("user", "name email");
+    const [feedbackList, { mentorByUserId, mentorByEmail }] = await Promise.all([
+      Feedback.find()
+        .populate("user", "name email")
+        .populate("mentorRespondedBy", "name email"),
+      buildPesertaMentorMaps(),
+    ]);
 
     const pesertaMap = new Map();
 
@@ -108,12 +168,33 @@ export const getPesertaFeedbackSummary = async (req: any, res: Response) => {
       if (!user) return;
 
       const userId = user._id.toString();
+      const userEmail = String(user.email || "")
+        .trim()
+        .toLowerCase();
+      const respondedBy =
+        feedback.mentorRespondedBy &&
+        typeof feedback.mentorRespondedBy === "object" &&
+        "name" in feedback.mentorRespondedBy
+          ? (feedback.mentorRespondedBy as any)
+          : null;
+
+      const assignedMentor =
+        mentorByUserId.get(userId) ||
+        (userEmail ? mentorByEmail.get(userEmail) : undefined) ||
+        (respondedBy
+          ? {
+              _id: respondedBy._id?.toString() || "",
+              name: respondedBy.name,
+              email: respondedBy.email || "",
+            }
+          : null);
 
       if (!pesertaMap.has(userId)) {
         pesertaMap.set(userId, {
           _id: userId,
           name: user.name,
           email: user.email,
+          mentor: assignedMentor,
           totalFeedback: 0,
           sentToMentor: 0,
           notSentToMentor: 0,
@@ -122,6 +203,8 @@ export const getPesertaFeedbackSummary = async (req: any, res: Response) => {
           feedbackMonths: [],
           lastFeedbackDate: null,
         });
+      } else if (!pesertaMap.get(userId).mentor && assignedMentor) {
+        pesertaMap.get(userId).mentor = assignedMentor;
       }
 
       const peserta = pesertaMap.get(userId);
