@@ -644,6 +644,14 @@ export const getSuperadminDashboardSummary = async (
     ]);
     const asalJenisCountMap = new Map<string, number>();
     const genderCountMap = new Map<string, number>();
+    const tipePesertaMap = new Map<string, number>([
+      ["Individu", 0],
+      ["Kelompok", 0],
+    ]);
+    const formasiDemandMap = new Map<
+      string,
+      { label: string; count: number }
+    >();
     const jurusanBreakdownMap = new Map<
       string,
       { label: string; count: number }
@@ -726,6 +734,20 @@ export const getSuperadminDashboardSummary = async (
       );
       if (hasEntityFilters && matchingPesertaInPd.length === 0) {
         continue;
+      }
+
+      // Peminat per Formasi
+      for (const ps of matchingPesertaInPd) {
+        const fNama = String(ps.posisi || "").trim();
+        if (fNama) {
+          const fKey = normalizeText(fNama);
+          const prevF = formasiDemandMap.get(fKey) || {
+            label: fNama,
+            count: 0,
+          };
+          prevF.count += 1;
+          formasiDemandMap.set(fKey, prevF);
+        }
       }
 
       if (isIsoInRange(createdIso, startIso, endIso)) {
@@ -852,6 +874,9 @@ export const getSuperadminDashboardSummary = async (
 
         const gender = ps.jenisKelamin || "Tidak Disebutkan";
         genderCountMap.set(gender, (genderCountMap.get(gender) || 0) + 1);
+
+        const tipeLabel = pd.kategori === "bersama" ? "Kelompok" : "Individu";
+        tipePesertaMap.set(tipeLabel, (tipePesertaMap.get(tipeLabel) || 0) + 1);
 
         const jurNama = String(ps.jurusan || "").trim();
         if (jurNama) {
@@ -1436,6 +1461,12 @@ export const getSuperadminDashboardSummary = async (
           label,
           count,
         })),
+        tipePeserta: Array.from(tipePesertaMap.entries()).map(
+          ([label, count]) => ({ label, count }),
+        ),
+        formasiDemand: Array.from(formasiDemandMap.values()).sort(
+          (a, b) => b.count - a.count,
+        ),
         jurusanBreakdown: Array.from(jurusanBreakdownMap.values()).sort(
           (a, b) => b.count - a.count,
         ),
