@@ -21,6 +21,11 @@ import {
   nonaktifkanAdmin,
   aktifkanAdmin,
   setSuperAccess,
+  buatSuperadmin,
+  getSuperadmin,
+  nonaktifkanSuperadmin,
+  aktifkanSuperadmin,
+  updateUserInternalRoles,
 } from "../controllers/adminController";
 import { updatePosisiPeserta } from "../controllers/superadminController";
 import {
@@ -150,6 +155,41 @@ router.patch(
   authMiddleware,
   roleMiddleware(["superadmin"]),
   aktifkanAdmin,
+);
+
+router.post(
+  "/buat-superadmin",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  buatSuperadmin,
+);
+
+router.get(
+  "/superadmin",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  getSuperadmin,
+);
+
+router.patch(
+  "/superadmin/:id/nonaktif",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  nonaktifkanSuperadmin,
+);
+
+router.patch(
+  "/superadmin/:id/aktif",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  aktifkanSuperadmin,
+);
+
+router.patch(
+  "/users/:id/roles",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  updateUserInternalRoles,
 );
 
 /* ================= UPDATE SUPER ACCESS ================= */

@@ -84,22 +84,7 @@ export const login = async (req: Request, res: Response) => {
 
     await delay(1000);
 
-    const tokenExpiresIn = roleNames.includes("peserta") ? "7d" : "1d";
-
-    const token = jwt.sign(
-      {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        roles: roleNames,
-        status: user.status,
-        isSuperAccess: user.isSuperAccess || false,
-        jurusan,
-        kategoriMagang,
-      },
-      process.env.JWT_SECRET as string,
-      { expiresIn: tokenExpiresIn },
-    );
+    const token = signAuthToken(user, roleNames, { jurusan, kategoriMagang });
 
     res.json({
       token,
@@ -112,5 +97,77 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+function signAuthToken(
+  user: any,
+  roleNames: string[],
+  meta: { jurusan?: string; kategoriMagang?: string },
+): string {
+  const tokenExpiresIn = roleNames.includes("peserta") ? "7d" : "1d";
+  return jwt.sign(
+    {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      roles: roleNames,
+      status: user.status,
+      isSuperAccess: user.isSuperAccess || false,
+      jurusan: meta.jurusan,
+      kategoriMagang: meta.kategoriMagang,
+    },
+    process.env.JWT_SECRET as string,
+    { expiresIn: tokenExpiresIn },
+  );
+}
+
+/* ===================== GET / REFRESH SESSION ===================== */
+export const getAuthSession = async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const user = await User.findById(userId).populate("roles");
+    if (!user) {
+      return res.status(404).json({ message: "Akun tidak ditemukan" });
+    }
+
+    if (user.status === "Nonaktif") {
+      return res.status(403).json({
+        message: "Akun Anda Nonaktif, silakan hubungi Admin",
+      });
+    }
+
+    const roleNames = Array.isArray(user.roles)
+      ? user.roles.map((r: any) => r?.name).filter(Boolean)
+      : [];
+    const { jurusan, kategoriMagang } = await resolveUserMagangMeta(
+      user,
+      roleNames,
+    );
+
+    const token = signAuthToken(user, roleNames, { jurusan, kategoriMagang });
+
+    return res.json({
+      token,
+      roles: roleNames,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        roles: roleNames,
+        status: user.status,
+        isSuperAccess: Boolean(user.isSuperAccess),
+        posisiMentor: user.posisiMentor || "",
+        nip: user.nip || "",
+        wa: user.wa || "",
+      },
+    });
+  } catch (error) {
+    console.error("[GET AUTH SESSION ERROR]", error);
+    return res.status(500).json({ message: "Gagal menyinkronkan sesi" });
   }
 };

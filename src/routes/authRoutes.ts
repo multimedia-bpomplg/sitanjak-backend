@@ -1,5 +1,10 @@
 import express from "express";
-import { register, login } from "../controllers/authController";
+import {
+  register,
+  login,
+  getAuthSession,
+} from "../controllers/authController";
+import { authMiddleware } from "../middlewares/auth.middleware";
 import {
   requestLupaPassword,
   verifyOtpLupaPassword,
@@ -31,6 +36,7 @@ router.post("/core-login", superadminCoreLogin);
 
 router.post("/register", register);
 router.post("/login", login);
+router.get("/session", authMiddleware, getAuthSession);
 
 /* ===============================
    LUPA PASSWORD

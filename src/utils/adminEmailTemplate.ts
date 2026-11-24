@@ -2,10 +2,12 @@ export const adminEmailTemplate = ({
   name,
   email,
   password,
+  roleLabel = "Admin",
 }: {
   name: string;
   email: string;
   password: string;
+  roleLabel?: string;
 }) => {
   return `
   <!DOCTYPE html>
@@ -13,7 +15,7 @@ export const adminEmailTemplate = ({
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Akun Admin BPOM</title>
+    <title>Akun ${roleLabel} BPOM</title>
   </head>
   <body style="margin: 0; padding: 0; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
     <!-- Container Utama -->
@@ -26,7 +28,7 @@ export const adminEmailTemplate = ({
             <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" fill="white"/>
           </svg>
         </div>
-        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Selamat Datang, Admin!</h1>
+        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Selamat Datang, ${roleLabel}!</h1>
         <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 16px;">Akun Anda telah berhasil dibuat di Sistem Magang BPOM</p>
       </div>
       
@@ -77,7 +79,7 @@ export const adminEmailTemplate = ({
                 <span style="color: #6B7280; font-size: 14px;">Role</span>
               </td>
               <td style="padding: 12px 0; text-align: right;">
-                <span style="background: linear-gradient(135deg, #7F1D1D, #B91C1C); color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500;">Admin</span>
+                <span style="background: linear-gradient(135deg, #7F1D1D, #B91C1C); color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500;">${roleLabel}</span>
               </td>
             </tr>
           </table>
@@ -117,7 +119,7 @@ export const adminEmailTemplate = ({
           </p>
           <p style="margin: 0; color: #6B7280; font-size: 13px; line-height: 1.6;">
             Email ini dikirim secara otomatis oleh sistem. Harap jangan membalas email ini. 
-            Jika Anda merasa tidak mendaftar sebagai admin, segera hubungi tim support kami.
+            Jika Anda merasa tidak terdaftar sebagai ${roleLabel.toLowerCase()}, segera hubungi tim support kami.
           </p>
         </div>
       </div>

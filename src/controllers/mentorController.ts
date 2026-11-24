@@ -82,12 +82,21 @@ export const buatMentor = async (req: Request, res: Response) => {
 export const getMentor = async (_req: Request, res: Response) => {
   try {
     const role = await Role.findOne({ name: "mentor" });
+    if (!role) return res.json([]);
 
-    const data = await User.find({ roles: role?._id }).select(
-      "name email status posisiMentor nip wa",
-    );
+    const data = await User.find({ roles: role._id })
+      .select("name email status posisiMentor nip wa roles")
+      .populate("roles", "name")
+      .lean();
 
-    res.json(data);
+    const formatted = data.map((u: any) => ({
+      ...u,
+      roles: Array.isArray(u.roles)
+        ? u.roles.map((r: any) => r?.name).filter(Boolean)
+        : ["mentor"],
+    }));
+
+    res.json(formatted);
   } catch {
     res.status(500).json({ message: "Gagal memuat mentor" });
   }
