@@ -10,6 +10,38 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+async function findAssignedMentorForPeserta(
+  userId: string,
+  email: string,
+): Promise<{ mentorId: any; pesertaNama: string } | null> {
+  const normalizedEmail = (email || "").trim().toLowerCase();
+  const emailRegex = normalizedEmail
+    ? new RegExp(`^${escapeRegex(normalizedEmail)}$`, "i")
+    : null;
+
+  const pendaftaran = await Pendaftaran.findOne({
+    status: "Disetujui",
+    $or: [
+      { "peserta.user": userId },
+      ...(emailRegex ? [{ "peserta.email": emailRegex }] : []),
+    ],
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const peserta = (pendaftaran as any)?.peserta?.find(
+    (p: any) =>
+      p.user?.toString() === userId ||
+      (normalizedEmail && p.email?.toLowerCase() === normalizedEmail),
+  );
+
+  if (!peserta?.mentor) return null;
+  return {
+    mentorId: peserta.mentor,
+    pesertaNama: peserta.nama || "Peserta",
+  };
+}
+
 function validateSurveyInput(body: any): string | null {
   const {
     kepuasanMagang,
@@ -128,6 +160,20 @@ export const createFeedback = async (req: any, res: Response) => {
       status: "Dikirim",
     });
 
+    const assigned = await findAssignedMentorForPeserta(
+      userId,
+      req.user.email || "",
+    );
+    if (assigned?.mentorId) {
+      await createNotification({
+        recipientId: assigned.mentorId,
+        title: "Survei & Feedback Baru",
+        message: `${assigned.pesertaNama} telah mengirim survei dan feedback magang.`,
+        type: "info",
+        linkUrl: "/dashboard/mentor/ViewFeedback",
+      });
+    }
+
     res.status(201).json(feedback);
   } catch (err) {
     console.error(err);
@@ -163,6 +209,20 @@ export const sendFeedbackToMentor = async (req: any, res: Response) => {
     feedback.status = "Dikirim";
 
     await feedback.save();
+
+    const assigned = await findAssignedMentorForPeserta(
+      userId,
+      req.user.email || "",
+    );
+    if (assigned?.mentorId) {
+      await createNotification({
+        recipientId: assigned.mentorId,
+        title: "Survei & Feedback Baru",
+        message: `${assigned.pesertaNama} telah mengirim survei dan feedback magang.`,
+        type: "info",
+        linkUrl: "/dashboard/mentor/ViewFeedback",
+      });
+    }
 
     res.json({
       message: "Feedback berhasil dikirim ke mentor",
@@ -329,6 +389,8 @@ export const respondFeedback = async (req: any, res: Response) => {
       });
     }
 
+    const recipientUserId = (feedback.user as any)?._id || feedback.user;
+
     if (targetStatus === "Revisi") {
       feedback.status = "Revisi";
       feedback.revisionNote = noteText;
@@ -338,9 +400,9 @@ export const respondFeedback = async (req: any, res: Response) => {
       feedback.mentorRespondedBy = mentorId;
       await feedback.save();
 
-      if ((feedback.user as any)?._id) {
-        createNotification({
-          recipientId: (feedback.user as any)._id,
+      if (recipientUserId) {
+        await createNotification({
+          recipientId: recipientUserId,
           title: "Revisi Survei & Feedback Diminta",
           message: `Mentor meminta revisi survei & feedback Anda: "${noteText}"`,
           type: "warning",
@@ -363,9 +425,9 @@ export const respondFeedback = async (req: any, res: Response) => {
 
     await feedback.save();
 
-    if ((feedback.user as any)?._id) {
-      createNotification({
-        recipientId: (feedback.user as any)._id,
+    if (recipientUserId) {
+      await createNotification({
+        recipientId: recipientUserId,
         title: "Feedback Direspon Mentor",
         message: "Mentor telah menanggapi survei & feedback Anda.",
         type: "success",
@@ -430,28 +492,12 @@ export const updateFeedbackRevisi = async (req: any, res: Response) => {
     feedback.feedbackMentorSentAt = new Date();
     await feedback.save();
 
-    const emailRegex = email ? new RegExp(`^${escapeRegex(email)}$`, "i") : null;
-    const pendaftaran = await Pendaftaran.findOne({
-      status: "Disetujui",
-      $or: [
-        { "peserta.user": userId },
-        ...(emailRegex ? [{ "peserta.email": emailRegex }] : []),
-      ],
-    })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const peserta = (pendaftaran as any)?.peserta?.find(
-      (p: any) =>
-        p.user?.toString() === userId ||
-        (email && p.email?.toLowerCase() === email),
-    );
-
-    if (peserta?.mentor) {
-      createNotification({
-        recipientId: peserta.mentor,
+    const assigned = await findAssignedMentorForPeserta(userId, email);
+    if (assigned?.mentorId) {
+      await createNotification({
+        recipientId: assigned.mentorId,
         title: "Revisi Feedback Dikirim",
-        message: `${peserta.nama || "Peserta"} telah mengirim ulang revisi survei & feedback.`,
+        message: `${assigned.pesertaNama} telah mengirim ulang revisi survei & feedback.`,
         type: "info",
         linkUrl: "/dashboard/mentor/ViewFeedback",
       });

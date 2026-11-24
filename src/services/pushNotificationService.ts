@@ -10,6 +10,7 @@ export interface PushPayload {
 }
 
 let vapidInitialized = false;
+let vapidMissingWarned = false;
 
 function ensureVapidConfigured(): boolean {
   if (vapidInitialized) return true;
@@ -21,6 +22,12 @@ function ensureVapidConfigured(): boolean {
   ).trim();
 
   if (!publicKey || !privateKey) {
+    if (!vapidMissingWarned) {
+      vapidMissingWarned = true;
+      console.warn(
+        "⚠️ [PushService] VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY belum dikonfigurasi. Web Push tidak akan dikirim.",
+      );
+    }
     return false;
   }
 

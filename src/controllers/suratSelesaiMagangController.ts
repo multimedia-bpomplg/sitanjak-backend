@@ -3,6 +3,8 @@ import SuratSelesaiMagang from "../models/SuratSelesaiMagang";
 import LaporanAkhir from "../models/LaporanAkhir";
 import Feedback from "../models/Feedback";
 import Pendaftaran from "../models/pendaftaran";
+import User from "../models/User";
+import { createNotification } from "../services/notificationService";
 import path from "path";
 import fs from "fs";
 
@@ -62,6 +64,27 @@ export const uploadSuratSelesaiMagang = async (req: any, res: Response) => {
       file: `surat-selesai/${file.filename}`,
       tanggalKirim: new Date(),
     });
+
+    let recipientUserId = (peserta as any)?.user;
+    if (!recipientUserId) {
+      const escaped = String(email).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const userDoc = await User.findOne({
+        email: new RegExp(`^${escaped}$`, "i"),
+      })
+        .select("_id")
+        .lean();
+      recipientUserId = userDoc?._id;
+    }
+
+    if (recipientUserId) {
+      await createNotification({
+        recipientId: recipientUserId,
+        title: "Surat Selesai Magang Tersedia",
+        message: "Surat selesai magang Anda telah diunggah oleh Admin.",
+        type: "success",
+        linkUrl: "/dashboard/peserta/laporan-akhir",
+      });
+    }
 
     res.status(201).json({
       message: "Surat selesai magang berhasil dikirim",

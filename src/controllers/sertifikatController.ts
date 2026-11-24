@@ -94,16 +94,34 @@ export const uploadSertifikatMagangController = async (
     }
 
     if (recipientUserId) {
-      createNotification({
+      const [laporan, feedbackList] = await Promise.all([
+        LaporanAkhir.findOne({ user: recipientUserId }).select("status").lean(),
+        Feedback.find({ user: recipientUserId })
+          .select("status mentorResponse")
+          .lean(),
+      ]);
+
+      const isLapApproved = (laporan as any)?.status === "Disetujui";
+      const isFeedbackResponded = feedbackList.some(
+        (fb: any) =>
+          fb.status === "Direspon" ||
+          (fb.status !== "Revisi" &&
+            Boolean(fb.mentorResponse && String(fb.mentorResponse).trim())),
+      );
+      const canDownloadNow = isLapApproved && isFeedbackResponded;
+
+      await createNotification({
         recipientId: recipientUserId,
         title: existing
           ? "Sertifikat Magang Diperbarui"
           : "Sertifikat Magang Tersedia",
         message: existing
           ? "Sertifikat magang Anda telah diperbarui oleh Admin."
-          : "Sertifikat magang Anda telah diunggah oleh Admin dan siap diunduh.",
+          : canDownloadNow
+            ? "Sertifikat magang Anda telah diunggah oleh Admin dan siap diunduh."
+            : "Sertifikat magang Anda telah diunggah oleh Admin. Pastikan Laporan Akhir disetujui dan Feedback direspon Mentor untuk mengunduhnya.",
         type: "success",
-        linkUrl: "/dashboard/peserta/ganti-password",
+        linkUrl: "/dashboard/peserta/laporan-akhir",
       });
     }
 

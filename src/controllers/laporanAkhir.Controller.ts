@@ -217,6 +217,16 @@ export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
       lampiran2Size: lampiran2?.size || null,
     });
 
+    if ((peserta as any)?.mentor) {
+      await createNotification({
+        recipientId: (peserta as any).mentor,
+        title: "Laporan Akhir Diunggah",
+        message: `${peserta?.nama || "Peserta"} telah mengunggah laporan akhir magang untuk ditinjau.`,
+        type: "info",
+        linkUrl: "/dashboard/mentor/ViewLaporanAkhir",
+      });
+    }
+
     res.status(201).json({
       message: "Upload berhasil",
       laporan,
@@ -485,12 +495,17 @@ export const updateStatusDanPenilaian = async (req: any, res: Response) => {
       .populate("user", "name email")
       .populate("approvedByMentor", "name email");
 
+    const recipientUserId =
+      (updated?.user as any)?._id ||
+      (laporan.user as any)?._id ||
+      (typeof laporan.user === "string" || laporan.user ? laporan.user : null);
+
     if (
-      (laporan.user as any)?._id &&
+      recipientUserId &&
       (status === "Disetujui" || status === "Ditolak" || status === "Revisi")
     ) {
-      createNotification({
-        recipientId: (laporan.user as any)._id,
+      await createNotification({
+        recipientId: recipientUserId,
         title:
           status === "Disetujui"
             ? "Laporan Akhir Disetujui"
