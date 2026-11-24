@@ -91,7 +91,7 @@ export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
 
     const exists = await LaporanAkhir.findOne({ user: userId });
 
-    if (exists) {
+    if (exists && exists.status !== "Revisi") {
       cleanupUploadedFiles([file, lampiran1, lampiran2]);
       return res.status(400).json({
         message: "Laporan akhir sudah dikirim",
@@ -122,7 +122,7 @@ export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
     }
 
     const endIso = parseDateIso(peserta?.tanggalSelesaiMagang);
-    if (endIso) {
+    if (!exists && endIso) {
       const todayIso = toIsoDate(getNowWIB());
       const openUploadIso = shiftIsoDate(endIso, -10);
       if (todayIso < openUploadIso) {
@@ -151,6 +151,53 @@ export const uploadLaporanAkhirPdf = async (req: any, res: Response) => {
       cleanupUploadedFiles([file, lampiran1, lampiran2]);
       return res.status(400).json({
         message: "Lampiran 2 maksimal 2MB",
+      });
+    }
+
+    if (exists && exists.status === "Revisi") {
+      const prevPaths = [
+        exists.filePdf ? { path: exists.filePdf } : undefined,
+        lampiran1 && exists.lampiran1Pdf ? { path: exists.lampiran1Pdf } : undefined,
+        lampiran2 && exists.lampiran2Pdf ? { path: exists.lampiran2Pdf } : undefined,
+      ];
+
+      exists.filePdf = file.path;
+      exists.fileName = file.originalname;
+      exists.fileSize = file.size;
+
+      if (lampiran1) {
+        exists.lampiran1Pdf = lampiran1.path;
+        exists.lampiran1Name = lampiran1.originalname;
+        exists.lampiran1Size = lampiran1.size;
+      }
+      if (lampiran2) {
+        exists.lampiran2Pdf = lampiran2.path;
+        exists.lampiran2Name = lampiran2.originalname;
+        exists.lampiran2Size = lampiran2.size;
+      }
+
+      exists.status = "Menunggu";
+      exists.mentorNote = "";
+      exists.set("approvedByMentor", null);
+      exists.approvedAt = undefined;
+      exists.submittedAt = new Date();
+      await exists.save();
+
+      cleanupUploadedFiles(prevPaths);
+
+      if ((peserta as any)?.mentor) {
+        createNotification({
+          recipientId: (peserta as any).mentor,
+          title: "Revisi Laporan Akhir Dikirim",
+          message: `${peserta?.nama || "Peserta"} telah mengunggah ulang revisi laporan akhir magang untuk ditinjau.`,
+          type: "info",
+          linkUrl: "/dashboard/mentor/ViewLaporanAkhir",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Revisi laporan akhir berhasil diunggah",
+        laporan: exists,
       });
     }
 
@@ -348,9 +395,17 @@ export const updateStatusDanPenilaian = async (req: any, res: Response) => {
     const { status, mentorNote, penilaian } = req.body;
 
     // Validasi status
-    const validStatus = ["Menunggu", "Disetujui", "Ditolak"];
+    const validStatus = ["Menunggu", "Revisi", "Disetujui", "Ditolak"];
     if (!validStatus.includes(status)) {
       return res.status(400).json({ message: "Status tidak valid" });
+    }
+
+    const cleanNote = typeof mentorNote === "string" ? mentorNote.trim() : "";
+    if (status === "Revisi" && !cleanNote) {
+      return res.status(400).json({
+        message:
+          "Catatan revisi wajib diisi agar peserta mengetahui hal yang harus diperbaiki",
+      });
     }
 
     const laporan = await LaporanAkhir.findById(id).populate("user", "email");
@@ -381,8 +436,13 @@ export const updateStatusDanPenilaian = async (req: any, res: Response) => {
     // Update data
     const updateData: any = {
       status,
-      mentorNote: mentorNote || "",
+      mentorNote: cleanNote,
     };
+
+    if (status === "Revisi" || status === "Ditolak") {
+      updateData.approvedByMentor = mentorId;
+      updateData.approvedAt = new Date();
+    }
 
     if (status === "Disetujui") {
       updateData.approvedByMentor = mentorId;
@@ -425,18 +485,30 @@ export const updateStatusDanPenilaian = async (req: any, res: Response) => {
       .populate("user", "name email")
       .populate("approvedByMentor", "name email");
 
-    if ((laporan.user as any)?._id && (status === "Disetujui" || status === "Ditolak")) {
+    if (
+      (laporan.user as any)?._id &&
+      (status === "Disetujui" || status === "Ditolak" || status === "Revisi")
+    ) {
       createNotification({
         recipientId: (laporan.user as any)._id,
         title:
           status === "Disetujui"
             ? "Laporan Akhir Disetujui"
-            : "Laporan Akhir Ditolak",
+            : status === "Revisi"
+              ? "Revisi Laporan Akhir Diminta"
+              : "Laporan Akhir Ditolak",
         message:
           status === "Disetujui"
             ? "Laporan akhir magang Anda telah disetujui oleh Mentor."
-            : `Laporan akhir magang Anda ditolak oleh Mentor${mentorNote ? `: "${mentorNote}"` : "."}`,
-        type: status === "Disetujui" ? "success" : "alert",
+            : status === "Revisi"
+              ? `Mentor meminta revisi laporan akhir Anda: "${cleanNote}"`
+              : `Laporan akhir magang Anda ditolak oleh Mentor${cleanNote ? `: "${cleanNote}"` : "."}`,
+        type:
+          status === "Disetujui"
+            ? "success"
+            : status === "Revisi"
+              ? "warning"
+              : "alert",
         linkUrl: "/dashboard/peserta/laporan-akhir",
       });
     }

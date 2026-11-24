@@ -36,7 +36,7 @@ const FeedbackSchema = new mongoose.Schema(
       type: Date,
     },
 
-    /* ===== RESPONSE DARI MENTOR ===== */
+    /* ===== RESPONSE / REVISI DARI MENTOR ===== */
     mentorResponse: {
       type: String,
       default: "",
@@ -52,10 +52,19 @@ const FeedbackSchema = new mongoose.Schema(
       default: null,
     },
 
+    revisionNote: {
+      type: String,
+      default: "",
+    },
+
+    revisionRequestedAt: {
+      type: Date,
+    },
+
     /* ===== STATUS FEEDBACK ===== */
     status: {
       type: String,
-      enum: ["Dikirim", "Dibaca", "Direspon"],
+      enum: ["Dikirim", "Dibaca", "Revisi", "Direspon"],
       default: "Dikirim",
     },
     /* ===== SURVEY PENILAIAN (1-5) ===== */

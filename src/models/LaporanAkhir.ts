@@ -104,7 +104,7 @@ const LaporanAkhirSchema = new mongoose.Schema(
     /* ===== STATUS LAPORAN ===== */
     status: {
       type: String,
-      enum: ["Menunggu", "Disetujui", "Ditolak"],
+      enum: ["Menunggu", "Revisi", "Disetujui", "Ditolak"],
       default: "Menunggu",
     },
 

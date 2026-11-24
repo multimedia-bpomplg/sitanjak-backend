@@ -185,7 +185,8 @@ export const downloadSertifikat = async (req: any, res: Response) => {
       const isFeedbackResponded = feedbackList.some(
         (fb: any) =>
           fb.status === "Direspon" ||
-          Boolean(fb.mentorResponse && String(fb.mentorResponse).trim()),
+          (fb.status !== "Revisi" &&
+            Boolean(fb.mentorResponse && String(fb.mentorResponse).trim())),
       );
 
       if (

@@ -9,6 +9,7 @@ import {
   getAllFeedback,
   getFeedbackDetail,
   sendFeedbackToMentor,
+  updateFeedbackRevisi,
 } from "../controllers/feedbackController";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
@@ -19,6 +20,7 @@ const router = Router();
 router.post("/", authMiddleware, createFeedback);
 router.get("/riwayat", authMiddleware, getRiwayatFeedback);
 router.get("/:month", authMiddleware, getFeedbackByMonth);
+router.put("/:id", authMiddleware, updateFeedbackRevisi);
 router.put("/:id/send-to-mentor", authMiddleware, sendFeedbackToMentor);
 
 /* ================= MENTOR ================= */
