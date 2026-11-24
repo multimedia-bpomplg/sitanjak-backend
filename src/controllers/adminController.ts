@@ -287,7 +287,7 @@ export const getAdminDashboardSummary = async (req: any, res: Response) => {
       }
     });
 
-    const pendaftaranTerbaru = pendaftaranList.slice(0, 6).map((doc: any) => ({
+    const pendaftaranTerbaru = pendaftaranList.map((doc: any) => ({
       _id: doc._id,
       kategori: doc.kategori,
       status: doc.status,

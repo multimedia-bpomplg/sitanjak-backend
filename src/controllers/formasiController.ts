@@ -195,6 +195,95 @@ export const getFormasi = async (req: Request, res: Response) => {
   }
 };
 
+const escapeRegex = (str: string): string =>
+  str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildKodeSlug = (title: string): string => {
+  const cleaned = title
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned || `FORMASI-${Date.now()}`;
+};
+
+export const createFormasi = async (req: Request, res: Response) => {
+  try {
+    const rawTitle = String(req.body?.title || "").trim();
+    const rawKuota = req.body?.kuota;
+    const rawJurusan = req.body?.jurusan;
+
+    if (!rawTitle) {
+      return res.status(400).json({
+        message: "Nama formasi wajib diisi",
+      });
+    }
+
+    const parsedKuota = rawKuota === undefined ? 5 : Number(rawKuota);
+    if (!Number.isInteger(parsedKuota) || parsedKuota < 0) {
+      return res.status(400).json({
+        message: "Kuota standar harus berupa bilangan bulat >= 0",
+      });
+    }
+
+    const existingTitle = await Formasi.findOne({
+      title: new RegExp(`^${escapeRegex(rawTitle)}$`, "i"),
+    }).lean();
+
+    if (existingTitle) {
+      return res.status(409).json({
+        message: `Formasi "${rawTitle}" sudah terdaftar`,
+      });
+    }
+
+    const parsedJurusan: string[] = Array.isArray(rawJurusan)
+      ? Array.from(
+          new Set(
+            rawJurusan
+              .map((j: unknown) => String(j || "").trim())
+              .filter(Boolean),
+          ),
+        )
+      : typeof rawJurusan === "string"
+        ? Array.from(
+            new Set(
+              rawJurusan
+                .split(",")
+                .map((j) => j.trim())
+                .filter(Boolean),
+            ),
+          )
+        : [];
+
+    const baseKode = buildKodeSlug(rawTitle);
+    let candidateKode = baseKode;
+    let suffix = 2;
+    while (await Formasi.exists({ kode: candidateKode })) {
+      candidateKode = `${baseKode}-${suffix}`;
+      suffix += 1;
+    }
+
+    const created = await Formasi.create({
+      title: rawTitle,
+      kuota: parsedKuota,
+      kuotaBulanan: [],
+      jurusan: parsedJurusan,
+      kode: candidateKode,
+      isActive: true,
+    });
+
+    return res.status(201).json({
+      message: `Formasi "${rawTitle}" berhasil ditambahkan`,
+      data: created,
+    });
+  } catch (error) {
+    console.error("[CREATE FORMASI ERROR]", error);
+    return res.status(500).json({
+      message: "Gagal menambahkan formasi baru",
+    });
+  }
+};
+
 export const updateKuotaFormasi = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
