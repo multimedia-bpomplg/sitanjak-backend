@@ -16,10 +16,19 @@ import {
   checkDataAvailability,
   getApiStatus,
 } from "../controllers/overviewController";
+import { getSuperadminDashboardSummary } from "../controllers/superadminDashboardController";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
 
 const router = Router();
+
+/* ================= SUPERADMIN DASHBOARD SUMMARY (SUPERADMIN ONLY) ================= */
+router.get(
+  "/superadmin-summary",
+  authMiddleware,
+  roleMiddleware(["superadmin"]),
+  getSuperadminDashboardSummary,
+);
 
 /* ================= GET OVERVIEW STATS ================= */
 router.get(

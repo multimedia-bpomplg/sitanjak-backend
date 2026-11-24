@@ -24,6 +24,8 @@ import penilaianAkhirRoutes from "./penilaianAkhir.routes";
 import evaluasiRoutes from "./evaluasiRoutes";
 import heroSettingRoutes from "./heroSettingRoutes";
 import holidayRoutes from "./holidayRoutes";
+import profilSettingRoutes from "./profilSettingRoutes";
+import footerSettingRoutes from "./footerSettingRoutes";
 
 const router = Router();
 
@@ -58,5 +60,7 @@ router.use("/penilaian-akhir", penilaianAkhirRoutes);
 router.use("/evaluasi", evaluasiRoutes);
 router.use("/hero-setting", heroSettingRoutes);
 router.use("/holidays", holidayRoutes);
+router.use("/profil-setting", profilSettingRoutes);
+router.use("/footer-setting", footerSettingRoutes);
 
 export default router;

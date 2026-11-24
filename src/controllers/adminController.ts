@@ -266,10 +266,10 @@ export const updateUserInternalRoles = async (req: any, res: Response) => {
       const nip = String(req.body?.nip ?? targetUser.nip ?? "").trim();
       const wa = String(req.body?.wa ?? targetUser.wa ?? "").trim();
 
-      if (!posisiMentor) {
+      if (!posisiMentor || !nip || !wa) {
         return res.status(400).json({
           message:
-            "Posisi / Fungsi Pembimbing wajib diisi jika peran Mentor dipilih",
+            "Posisi / Fungsi Pembimbing, NIP Mentor, dan Nomor WhatsApp wajib diisi jika peran Mentor dipilih",
         });
       }
 
