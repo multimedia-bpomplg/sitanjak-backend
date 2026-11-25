@@ -10,6 +10,40 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function getNowWIB(): Date {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }),
+  );
+}
+
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateIso(raw?: string): string | null {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  return toIsoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
+function shiftIsoDate(dateIso: string, deltaDays: number): string {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  return toIsoDate(new Date(y, m - 1, d + deltaDays));
+}
+
+function formatIsoToIndo(dateIso: string): string {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function getRoleNames(user: any): string[] {
   const raw = user?.roles;
   if (!Array.isArray(raw)) return [];
@@ -242,6 +276,39 @@ export const upsertMyEvaluasi = async (req: any, res: Response) => {
         return res.status(403).json({
           message:
             "Evaluasi & Surat Pernyataan sudah disetujui oleh mentor dan tidak dapat diubah lagi.",
+        });
+      }
+    }
+
+    // Validasi H-10 sebelum magang selesai
+    const emailRegex = email ? new RegExp(`^${escapeRegex(email)}$`, "i") : null;
+    const pendaftaran = await Pendaftaran.findOne({
+      status: "Disetujui",
+      $or: [
+        { "peserta.user": userId },
+        ...(emailRegex ? [{ "peserta.email": emailRegex }] : []),
+      ],
+    }).sort({ createdAt: -1 });
+
+    const peserta = pendaftaran?.peserta?.find(
+      (p: any) =>
+        p.user?.toString() === userId ||
+        (email && p.email?.toLowerCase() === email),
+    );
+
+    if (peserta?.statusMagang === "Tidak Magang") {
+      return res.status(403).json({
+        message: "Status kepesertaan magang Anda sedang tidak aktif.",
+      });
+    }
+
+    const endIso = parseDateIso(peserta?.tanggalSelesaiMagang);
+    if (!existing && endIso) {
+      const todayIso = toIsoDate(getNowWIB());
+      const openEvaluasiIso = shiftIsoDate(endIso, -10);
+      if (todayIso < openEvaluasiIso) {
+        return res.status(403).json({
+          message: `Pengisian Evaluasi & Surat Pernyataan hanya dibuka mulai H-10 sebelum magang selesai (${formatIsoToIndo(openEvaluasiIso)}).`,
         });
       }
     }
