@@ -11,6 +11,7 @@ import { maintenanceMiddleware } from "./middlewares/maintenance.middleware";
 import { startWhatsapp } from "./utils/whatsappClient";
 import { autoNonaktifPeserta } from "./jobs/autoNonaktifPeserta";
 import { reminderAbsenPulangJob } from "./jobs/reminderAbsenPulang";
+import { autoApproveLogbookJob } from "./jobs/autoApproveLogbook";
 import { ensureDefaultHolidaysSeeded } from "./services/holidayService";
 
 const app = express();
@@ -66,6 +67,7 @@ app.listen(PORT, async () => {
     /* START CRON JOB */
     autoNonaktifPeserta();
     reminderAbsenPulangJob();
+    autoApproveLogbookJob();
 
     console.log("===========================================");
     console.log("🚀 BPOM Internship API Server");

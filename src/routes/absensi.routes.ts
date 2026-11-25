@@ -9,6 +9,9 @@ import {
   getManageAbsensiList,
   getManageRekapPeserta,
   koreksiAbsensi,
+  getAttendanceTolerances,
+  upsertAttendanceTolerance,
+  deleteAttendanceTolerance,
 } from "../controllers/absensiController";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
@@ -59,6 +62,29 @@ router.patch(
   authMiddleware,
   roleMiddleware(["mentor"]),
   koreksiAbsensi,
+);
+
+/* ================= TOLERANSI JAM MASUK (ADMIN & SUPERADMIN) ================= */
+
+router.get(
+  "/toleransi",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  getAttendanceTolerances,
+);
+
+router.post(
+  "/toleransi",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  upsertAttendanceTolerance,
+);
+
+router.delete(
+  "/toleransi/:id",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  deleteAttendanceTolerance,
 );
 
 export default router;

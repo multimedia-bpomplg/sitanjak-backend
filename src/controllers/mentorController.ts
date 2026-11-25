@@ -13,7 +13,7 @@ import Absensi from "../models/Absensi";
 import PenilaianAkhir from "../models/PenilaianAkhir";
 import EvaluasiMagang from "../models/EvaluasiMagang";
 import { resolveKategoriMagang } from "../utils/pesertaKategori";
-import { getHolidayDateSet } from "../services/holidayService";
+import { getHolidayConfigSets } from "../services/holidayService";
 import {
   getMissedCutoffDateWib,
   getPenilaianAkhirSchedule,
@@ -352,7 +352,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       absensiList,
       penilaianAkhirList,
       evaluasiList,
-      holidayDates,
+      holidayConfig,
     ] =
       resolvedUserIds.length || emailLowerList.length
         ? await Promise.all([
@@ -423,9 +423,18 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
             })
               .select("user email status submittedAt reviewedAt createdAt")
               .lean(),
-            getHolidayDateSet(),
+            getHolidayConfigSets(),
           ])
-        : [[], [], [], [], [], [], new Set<string>()];
+        : [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            { holidayDates: new Set<string>(), overrideWorkdays: new Set<string>() },
+          ];
+    const { holidayDates, overrideWorkdays } = holidayConfig;
 
     const logbookCutoffIso = getMissedCutoffDateWib();
 
@@ -546,7 +555,12 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
         endIso && endIso < logbookCutoffIso ? endIso : logbookCutoffIso;
       const expectedWorkdays =
         p.statusMagang !== "Tidak Magang" && startIso && capEndIso >= startIso
-          ? getWorkdaysInRange(startIso, capEndIso, holidayDates)
+          ? getWorkdaysInRange(
+              startIso,
+              capEndIso,
+              holidayDates,
+              overrideWorkdays,
+            )
           : [];
       const filledSet = new Set<string>(rawLogbookStats.filledDates || []);
       const missedDates = expectedWorkdays
@@ -720,6 +734,7 @@ export const getMentorDashboardSummary = async (req: any, res: Response) => {
       summary,
       peserta: enrichedPeserta,
       holidayDates: Array.from(holidayDates),
+      overrideWorkdays: Array.from(overrideWorkdays),
     });
   } catch (err) {
     console.error("[GET MENTOR DASHBOARD SUMMARY]", err);

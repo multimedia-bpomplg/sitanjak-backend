@@ -8,6 +8,7 @@ import User from "../models/User"; // ✅ TAMBAH IMPORT INI
 import mongoose from "mongoose"; // ✅ TAMBAHKAN IMPORT INI
 import PDFDocument from "pdfkit";
 import { createNotification } from "../services/notificationService";
+import { isHolidayWib } from "../services/holidayService";
 
 /* ================= CREATE LOGBOOK ================= */
 export const createLogbook = async (req: any, res: Response) => {
@@ -85,6 +86,32 @@ export const createLogbook = async (req: any, res: Response) => {
       });
     }
 
+    const cleanupUploadedFiles = () => {
+      const removeTempFile = (relPath?: string) => {
+        if (!relPath) return;
+        try {
+          const fullPath = path.join(process.cwd(), relPath);
+          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        } catch {
+          // ignore cleanup error
+        }
+      };
+      images.forEach((imgPath) => removeTempFile(imgPath));
+      removeTempFile(pdfFilePath);
+    };
+
+    // Blokir pengisian logbook baru pada akhir pekan / hari libur nasional / cuti bersama
+    const dateStr = String(req.body.date || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const holidayStatus = await isHolidayWib(dateStr);
+      if (holidayStatus.isHoliday) {
+        cleanupUploadedFiles();
+        return res.status(403).json({
+          message: `Tanggal ${dateStr} (${holidayStatus.reason || "Hari Libur"}) merupakan jadwal libur. Anda tidak perlu mengisi logbook.`,
+        });
+      }
+    }
+
     // 🔒 WAJIB SUDAH CHECK-IN ABSENSI (ATAU IZIN KHUSUS STATUS TIDAK HADIR KETERANGAN)
     const absenOnDate = await Absensi.findOne({
       user: userId,
@@ -97,18 +124,7 @@ export const createLogbook = async (req: any, res: Response) => {
       req.body.status === "tidak_hadir_keterangan";
 
     if (!isCheckedIn && !isIzinAllowance) {
-      const removeTempFile = (relPath?: string) => {
-        if (!relPath) return;
-        try {
-          const fullPath = path.join(process.cwd(), relPath);
-          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-        } catch {
-          // ignore cleanup error
-        }
-      };
-
-      images.forEach((imgPath) => removeTempFile(imgPath));
-      removeTempFile(pdfFilePath);
+      cleanupUploadedFiles();
 
       return res.status(403).json({
         message:
@@ -125,17 +141,7 @@ export const createLogbook = async (req: any, res: Response) => {
       const kendalaLen = String(req.body.kendala || "").trim().length;
 
       if (judulLen < 150 || pengalamanLen < 150 || kendalaLen < 150) {
-        const removeTempFile = (relPath?: string) => {
-          if (!relPath) return;
-          try {
-            const fullPath = path.join(process.cwd(), relPath);
-            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-          } catch {
-            // ignore cleanup error
-          }
-        };
-        images.forEach((imgPath) => removeTempFile(imgPath));
-        removeTempFile(pdfFilePath);
+        cleanupUploadedFiles();
 
         return res.status(400).json({
           message:

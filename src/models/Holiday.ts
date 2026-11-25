@@ -1,12 +1,17 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
-export type HolidayType = "libur_nasional" | "cuti_bersama" | "khusus";
+export type HolidayType =
+  | "libur_nasional"
+  | "cuti_bersama"
+  | "khusus"
+  | "hari_masuk";
 export type HolidaySource = "auto" | "manual";
 
 export interface IHoliday extends Document {
   date: string; // YYYY-MM-DD (WIB)
   name: string;
   type: HolidayType;
+  originalType?: "libur_nasional" | "cuti_bersama" | null;
   source?: HolidaySource;
   createdBy?: Types.ObjectId | null;
   createdAt: Date;
@@ -29,8 +34,13 @@ const HolidaySchema = new Schema<IHoliday>(
     },
     type: {
       type: String,
-      enum: ["libur_nasional", "cuti_bersama", "khusus"],
+      enum: ["libur_nasional", "cuti_bersama", "khusus", "hari_masuk"],
       default: "khusus",
+    },
+    originalType: {
+      type: String,
+      enum: ["libur_nasional", "cuti_bersama"],
+      default: null,
     },
     source: {
       type: String,

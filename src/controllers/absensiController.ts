@@ -2,6 +2,7 @@ import { Response } from "express";
 import fs from "fs";
 import path from "path";
 import Absensi from "../models/Absensi";
+import AttendanceTolerance from "../models/AttendanceTolerance";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
 import Logbook from "../models/Logbook";
@@ -11,7 +12,7 @@ import {
 } from "../utils/absensiScoring";
 import {
   ensureDefaultHolidaysSeeded,
-  getHolidayDateSet,
+  getHolidayConfigSets,
   isHolidayWib,
 } from "../services/holidayService";
 
@@ -80,6 +81,7 @@ function getExpectedWorkdays(
   endIso: string | null,
   cutoffEndIso: string,
   holidayDates?: Set<string>,
+  overrideWorkdays?: Set<string>,
 ): Set<string> {
   const result = new Set<string>();
   if (!startIso) return result;
@@ -96,7 +98,8 @@ function getExpectedWorkdays(
   while (cur <= last && guard < 400) {
     const day = cur.getDay();
     const iso = toIsoDate(cur);
-    if (day !== 0 && day !== 6 && !holidayDates?.has(iso)) {
+    const isRegularWorkday = day !== 0 && day !== 6 && !holidayDates?.has(iso);
+    if (isRegularWorkday || overrideWorkdays?.has(iso)) {
       result.add(iso);
     }
     cur.setDate(cur.getDate() + 1);
@@ -150,16 +153,29 @@ function scoreByDiffMinutes(minutes: number): number {
   return 25;
 }
 
-function evaluateCheckInTime(nowWib: Date) {
+function parseLimitTimeSeconds(
+  limitTime = "08:00",
+  defaultSeconds = 8 * 3600,
+): number {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(limitTime || "").trim());
+  if (!m) return defaultSeconds;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60;
+}
+
+function evaluateCheckInTime(nowWib: Date, checkInLimitTime = "08:00") {
   const currentSec =
     nowWib.getHours() * 3600 + nowWib.getMinutes() * 60 + nowWib.getSeconds();
-  const limitSec = 8 * 3600; // 08.00.00 WIB
+  const limitSec = parseLimitTimeSeconds(checkInLimitTime, 8 * 3600);
   const diffSec = currentSec - limitSec;
+  const formattedLimit = checkInLimitTime.replace(":", ".");
+  const hasTolerance = checkInLimitTime !== "08:00";
 
   if (diffSec <= 0) {
     return {
       timeStatus: "on_time" as const,
-      timeStatusLabel: "Tepat Waktu",
+      timeStatusLabel: hasTolerance
+        ? `Tepat Waktu (Toleransi ${formattedLimit} WIB)`
+        : "Tepat Waktu",
       diffMinutes: 0,
       score: 100,
     };
@@ -169,10 +185,47 @@ function evaluateCheckInTime(nowWib: Date) {
   const score = scoreByDiffMinutes(lateMinutes);
   return {
     timeStatus: "late" as const,
-    timeStatusLabel: "Terlambat (> 08.00)",
+    timeStatusLabel: hasTolerance
+      ? `Terlambat (> ${formattedLimit})`
+      : "Terlambat (> 08.00)",
     diffMinutes: lateMinutes,
     score,
   };
+}
+
+async function recalculateAbsensiDateWithTolerance(
+  dateIso: string,
+  checkInLimitTime = "08:00",
+): Promise<number> {
+  const records = await Absensi.find({
+    date: dateIso,
+    attendanceMode: { $ne: "izin" },
+    checkIn: { $exists: true },
+  });
+
+  let updatedCount = 0;
+  for (const rec of records) {
+    // Jangan timpa catatan yang sudah dikoreksi manual oleh Mentor
+    if (rec.koreksiNote || !rec.checkIn?.time) continue;
+
+    const entryWib = toWibDate(rec.checkIn.time);
+    const evaluated = evaluateCheckInTime(entryWib, checkInLimitTime);
+
+    rec.checkIn.timeStatus = evaluated.timeStatus;
+    rec.checkIn.timeStatusLabel = evaluated.timeStatusLabel;
+    rec.checkIn.diffMinutes = evaluated.diffMinutes;
+    rec.checkIn.score = evaluated.score;
+
+    const outScore = rec.checkOut?.score ?? 0;
+    rec.dailyScore = rec.checkOut
+      ? Math.round((evaluated.score + outScore) / 2)
+      : Math.round(evaluated.score / 2);
+
+    await rec.save();
+    updatedCount += 1;
+  }
+
+  return updatedCount;
 }
 
 function evaluateCheckOutTime(nowWib: Date, hasNote: boolean) {
@@ -338,21 +391,31 @@ export const getTodayAbsensi = async (req: any, res: Response) => {
 
     await ensureDefaultHolidaysSeeded();
 
-    const [record, logbookExists, holidayStatus] = await Promise.all([
-      Absensi.findOne({
-        user: userId,
-        date: todayIso,
-      }),
-      Logbook.exists({ user: userId, date: todayIso }),
-      isHolidayWib(todayIso),
-    ]);
+    const [record, logbookExists, holidayStatus, activeTolerance] =
+      await Promise.all([
+        Absensi.findOne({
+          user: userId,
+          date: todayIso,
+        }),
+        Logbook.exists({ user: userId, date: todayIso }),
+        isHolidayWib(todayIso),
+        AttendanceTolerance.findOne({ date: todayIso }).lean(),
+      ]);
 
     return res.json({
       date: todayIso,
       absensi: record || null,
       hasLogbookToday: Boolean(logbookExists),
       isHoliday: holidayStatus.isHoliday,
+      isWorkdayOverride: Boolean(holidayStatus.isWorkdayOverride),
       holidayReason: holidayStatus.reason || null,
+      tolerance: activeTolerance
+        ? {
+            date: (activeTolerance as any).date,
+            checkInLimitTime: (activeTolerance as any).checkInLimitTime,
+            reason: (activeTolerance as any).reason,
+          }
+        : null,
     });
   } catch (err) {
     console.error("[GET TODAY ABSENSI ERROR]", err);
@@ -368,7 +431,7 @@ export const getRiwayatAbsensi = async (req: any, res: Response) => {
     const userId = req.user.id;
     const records = await Absensi.find({ user: userId })
       .sort({ date: -1 })
-      .limit(90);
+      .limit(365);
 
     return res.json(records);
   } catch (err) {
@@ -407,7 +470,7 @@ export const getAbsensiSummary = async (req: any, res: Response) => {
         (email && p.email?.toLowerCase() === email),
     );
 
-    const holidayDates = await getHolidayDateSet();
+    const { holidayDates, overrideWorkdays } = await getHolidayConfigSets();
 
     const { startIso: magangStartIso, cutoffEndIso: hMinus3Iso } =
       getHMinus3CutoffIso(
@@ -420,6 +483,7 @@ export const getAbsensiSummary = async (req: any, res: Response) => {
             peserta.tanggalMulaiMagang,
             peserta.tanggalSelesaiMagang,
             holidayDates,
+            overrideWorkdays,
           )
         : new Set<string>();
 
@@ -595,8 +659,22 @@ export const submitCheckIn = async (req: any, res: Response) => {
     );
     const isInsideBpom =
       distanceMeters <= BBPOM_PALEMBANG_COORD.radiusMeters;
+
+    if (attendanceMode === "masuk" && !isInsideBpom) {
+      removeUploadedFile(newPhotoPath);
+      return res.status(403).json({
+        message: `Lokasi Anda berada di luar area kantor BBPOM Palembang (${distanceMeters} m dari titik kantor, batas ${BBPOM_PALEMBANG_COORD.radiusMeters} m). Absen Masuk hanya dapat dilakukan di dalam area kantor BBPOM.`,
+      });
+    }
+
+    const activeTolerance: any = await AttendanceTolerance.findOne({
+      date: todayIso,
+    }).lean();
     const { timeStatus, timeStatusLabel, diffMinutes, score } =
-      evaluateCheckInTime(nowWib);
+      evaluateCheckInTime(
+        nowWib,
+        activeTolerance?.checkInLimitTime || "08:00",
+      );
 
     const checkInEntry = {
       time: new Date(),
@@ -1020,13 +1098,14 @@ export const getManageAbsensiList = async (req: any, res: Response) => {
       });
     }
 
-    const [rawRecords, holidayDates] = await Promise.all([
+    const [rawRecords, holidayConfig] = await Promise.all([
       Absensi.find(mongoQuery)
         .populate("user", "name email")
         .sort({ date: -1, updatedAt: -1 })
         .limit(500),
-      getHolidayDateSet(),
+      getHolidayConfigSets(),
     ]);
+    const { holidayDates, overrideWorkdays } = holidayConfig;
 
     const areaFilter = String(req.query.area || "all");
     const searchQ = String(req.query.search || "")
@@ -1182,6 +1261,7 @@ export const getManageAbsensiList = async (req: any, res: Response) => {
           endIso,
           cutoffEndIso,
           holidayDates,
+          overrideWorkdays,
         );
 
         for (const d of expectedDates) {
@@ -1268,12 +1348,13 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
       .trim()
       .toLowerCase();
 
-    const [records, holidayDates] = await Promise.all([
+    const [records, holidayConfig] = await Promise.all([
       mongoQuery
         ? Absensi.find(mongoQuery).populate("user", "name email")
         : Promise.resolve([]),
-      getHolidayDateSet(),
+      getHolidayConfigSets(),
     ]);
+    const { holidayDates, overrideWorkdays } = holidayConfig;
 
     const nowWib = getNowWIB();
     const todayIso = toIsoDate(nowWib);
@@ -1387,6 +1468,7 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
         acc.tanggalMulaiMagang,
         acc.tanggalSelesaiMagang,
         holidayDates,
+        overrideWorkdays,
       );
 
       // Abaikan absensi di luar periode magang atau setelah H-3 selesai magang
@@ -1481,6 +1563,7 @@ export const getManageRekapPeserta = async (req: any, res: Response) => {
             endIso,
             cutoffEndIso,
             holidayDates,
+            overrideWorkdays,
           );
           for (const d of expectedDates) {
             if (!acc.attendedDates.has(d)) {
@@ -1630,5 +1713,128 @@ export const koreksiAbsensi = async (req: any, res: Response) => {
     return res
       .status(500)
       .json({ message: "Gagal menyimpan koreksi absensi" });
+  }
+};
+
+// GET /api/absensi/toleransi
+export const getAttendanceTolerances = async (_req: any, res: Response) => {
+  try {
+    const nowWib = getNowWIB();
+    const todayIso = toIsoDate(nowWib);
+    const items = await AttendanceTolerance.find()
+      .sort({ date: -1 })
+      .limit(60)
+      .lean();
+
+    return res.json({
+      success: true,
+      todayIso,
+      data: items,
+    });
+  } catch (err) {
+    console.error("[GET ATTENDANCE TOLERANCES ERROR]", err);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat daftar toleransi jam masuk",
+    });
+  }
+};
+
+// POST /api/absensi/toleransi
+export const upsertAttendanceTolerance = async (req: any, res: Response) => {
+  try {
+    const nowWib = getNowWIB();
+    const todayIso = toIsoDate(nowWib);
+    const date = String(req.body?.date || todayIso).trim();
+    const checkInLimitTime = String(req.body?.checkInLimitTime || "").trim();
+    const reason =
+      String(req.body?.reason || "").trim() || "Dispensasi Cuaca / Hujan";
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        message: "Format tanggal toleransi wajib YYYY-MM-DD.",
+      });
+    }
+
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(checkInLimitTime)) {
+      return res.status(400).json({
+        message: "Format batas jam masuk wajib HH:mm (misal 09:00).",
+      });
+    }
+
+    const limitSec = parseLimitTimeSeconds(checkInLimitTime, 8 * 3600);
+    if (limitSec <= 8 * 3600 || limitSec >= 23 * 3600) {
+      return res.status(400).json({
+        message:
+          "Batas jam toleransi masuk harus lebih dari 08:00 dan sebelum 23:00 WIB.",
+      });
+    }
+
+    const actorUser = await User.findById(req.user.id).select("name").lean();
+    const roles: string[] = Array.isArray(req.user?.roles) ? req.user.roles : [];
+    const roleLabel = roles.includes("superadmin") ? "superadmin" : "admin";
+
+    const saved = await AttendanceTolerance.findOneAndUpdate(
+      { date },
+      {
+        $set: {
+          date,
+          checkInLimitTime,
+          reason,
+          createdBy: req.user.id,
+          createdByName: (actorUser as any)?.name || roleLabel.toUpperCase(),
+          createdByRole: roleLabel,
+        },
+      },
+      { upsert: true, new: true },
+    );
+
+    const updatedRecordsCount = await recalculateAbsensiDateWithTolerance(
+      date,
+      checkInLimitTime,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Toleransi jam masuk tanggal ${date} hingga ${checkInLimitTime.replace(":", ".")} WIB berhasil disimpan (${updatedRecordsCount} absensi diperbarui).`,
+      data: saved,
+      updatedRecordsCount,
+    });
+  } catch (err) {
+    console.error("[UPSERT ATTENDANCE TOLERANCE ERROR]", err);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal menyimpan toleransi jam masuk",
+    });
+  }
+};
+
+// DELETE /api/absensi/toleransi/:id
+export const deleteAttendanceTolerance = async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted: any = await AttendanceTolerance.findByIdAndDelete(id).lean();
+    if (!deleted) {
+      return res.status(404).json({
+        message: "Data toleransi jam masuk tidak ditemukan.",
+      });
+    }
+
+    const updatedRecordsCount = await recalculateAbsensiDateWithTolerance(
+      deleted.date,
+      "08:00",
+    );
+
+    return res.json({
+      success: true,
+      message: `Toleransi tanggal ${deleted.date} dihapus (${updatedRecordsCount} absensi dihitung ulang ke 08.00 WIB).`,
+      updatedRecordsCount,
+    });
+  } catch (err) {
+    console.error("[DELETE ATTENDANCE TOLERANCE ERROR]", err);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal menghapus toleransi jam masuk",
+    });
   }
 };

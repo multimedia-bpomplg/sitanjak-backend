@@ -287,3 +287,36 @@ export const uploadHeroImage = multer({
   fileFilter: heroImageFilter,
   limits: { fileSize: 5 * 1024 * 1024 }, // Maksimal 5MB
 });
+
+/* ================= STORAGE GALLERY LANDING IMAGE ================= */
+const storageGalleryImage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = "uploads/gallery";
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".webp";
+    const filename = `gallery-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+    cb(null, filename);
+  },
+});
+
+const galleryImageFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        "Hanya file gambar berformat PNG, JPG, atau WebP yang diperbolehkan",
+      ),
+    );
+  }
+};
+
+export const uploadGalleryImage = multer({
+  storage: storageGalleryImage,
+  fileFilter: galleryImageFilter,
+  limits: { fileSize: 350 * 1024 }, // Maksimal 350KB (wajib sudah terkompresi)
+});

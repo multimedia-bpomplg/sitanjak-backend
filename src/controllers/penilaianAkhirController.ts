@@ -10,7 +10,7 @@ import {
   getPenilaianAkhirSchedule,
 } from "../utils/absensiScoring";
 import { createNotification } from "../services/notificationService";
-import { getHolidayDateSet } from "../services/holidayService";
+import { getHolidayConfigSets } from "../services/holidayService";
 
 /* ================= HELPERS ================= */
 
@@ -82,7 +82,7 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
 
     if (penilaian) {
       const emailRegex = email ? new RegExp(`^${escapeRegex(email)}$`, "i") : null;
-      const [pendaftaran, absensiRecords, holidayDates] = await Promise.all([
+      const [pendaftaran, absensiRecords, holidayConfig] = await Promise.all([
         Pendaftaran.findOne({
           status: "Disetujui",
           $or: [
@@ -99,7 +99,7 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
             ...(emailRegex ? [{ email: emailRegex }] : []),
           ],
         }).lean(),
-        getHolidayDateSet(),
+        getHolidayConfigSets(),
       ]);
 
       const ps = (pendaftaran as any)?.peserta?.find(
@@ -112,7 +112,8 @@ export const getMyPenilaianAkhir = async (req: any, res: Response) => {
         absensiRecords,
         ps?.tanggalMulaiMagang,
         ps?.tanggalSelesaiMagang,
-        holidayDates,
+        holidayConfig.holidayDates,
+        holidayConfig.overrideWorkdays,
       );
 
       const a1 = {
@@ -267,7 +268,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
       absensiMatchConditions.push({ email: { $in: emails } });
     }
 
-    const [penilaianList, laporanList, allAbsensiDocs, holidayDates] = hasAnyTarget
+    const [penilaianList, laporanList, allAbsensiDocs, holidayConfig] = hasAnyTarget
       ? await Promise.all([
           PenilaianAkhir.find({
             $or: [
@@ -285,9 +286,15 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
                 .lean()
             : Promise.resolve([]),
           Absensi.find({ $or: absensiMatchConditions }).lean(),
-          getHolidayDateSet(),
+          getHolidayConfigSets(),
         ])
-      : [[], [], [], new Set<string>()];
+      : [
+          [],
+          [],
+          [],
+          { holidayDates: new Set<string>(), overrideWorkdays: new Set<string>() },
+        ];
+    const { holidayDates, overrideWorkdays } = holidayConfig;
 
     const penilaianByUserId = new Map<string, any>();
     const penilaianByEmail = new Map<string, any>();
@@ -335,6 +342,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
         p.tanggalMulaiMagang,
         p.tanggalSelesaiMagang,
         holidayDates,
+        overrideWorkdays,
       );
 
       const absInfo = {
@@ -514,15 +522,16 @@ export const upsertPenilaianAkhir = async (req: any, res: Response) => {
     if (targetEmailRegex) {
       absensiMatchOr.push({ email: targetEmailRegex });
     }
-    const [absensiDocs, holidayDates] = await Promise.all([
+    const [absensiDocs, holidayConfig] = await Promise.all([
       Absensi.find({ $or: absensiMatchOr }).lean(),
-      getHolidayDateSet(),
+      getHolidayConfigSets(),
     ]);
     const attendanceCalc = calculateFinalAttendanceScore(
       absensiDocs,
       matchedMentee?.tanggalMulaiMagang,
       matchedMentee?.tanggalSelesaiMagang,
-      holidayDates,
+      holidayConfig.holidayDates,
+      holidayConfig.overrideWorkdays,
     );
     const autoKehadiranNilai = attendanceCalc.averageScore;
     const a1 = {

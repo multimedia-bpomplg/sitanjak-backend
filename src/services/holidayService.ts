@@ -38,6 +38,7 @@ export const DEFAULT_HOLIDAYS_2026: Array<{
   { date: "2026-06-16", name: "1 Muharam Tahun Baru Islam 1448 Hijriah", type: "libur_nasional" },
   { date: "2026-08-17", name: "Proklamasi Kemerdekaan RI", type: "libur_nasional" },
   { date: "2026-08-25", name: "Maulid Nabi Muhammad SAW", type: "libur_nasional" },
+  { date: "2026-12-24", name: "Cuti Bersama Hari Raya Natal", type: "cuti_bersama" },
   { date: "2026-12-25", name: "Kelahiran Yesus Kristus (Natal)", type: "libur_nasional" },
 ];
 
@@ -316,10 +317,12 @@ export async function ensureDefaultHolidaysSeeded(
 }
 
 /**
- * Mengecek apakah tanggal `YYYY-MM-DD` (WIB) merupakan akhir pekan atau hari libur terdaftar.
+ * Mengecek apakah tanggal `YYYY-MM-DD` (WIB) merupakan akhir pekan atau hari libur terdaftar,
+ * dengan memperhatikan override hari kerja (`type: "hari_masuk"`) yang dibuka Admin/Superadmin.
  */
 export async function isHolidayWib(dateIso: string): Promise<{
   isHoliday: boolean;
+  isWorkdayOverride?: boolean;
   reason?: string;
 }> {
   const targetYear = Number(dateIso.slice(0, 4));
@@ -327,39 +330,67 @@ export async function isHolidayWib(dateIso: string): Promise<{
     Number.isInteger(targetYear) ? targetYear : undefined,
   );
 
+  // Prioritaskan catatan database terlebih dahulu (termasuk override hari masuk)
+  const holidayDoc: any = await Holiday.findOne({ date: dateIso }).lean();
+  if (holidayDoc) {
+    if (holidayDoc.type === "hari_masuk") {
+      return {
+        isHoliday: false,
+        isWorkdayOverride: true,
+        reason: holidayDoc.name || "Hari Kerja Khusus (Tetap Masuk)",
+      };
+    }
+    return {
+      isHoliday: true,
+      isWorkdayOverride: false,
+      reason: holidayDoc.name || "Hari Libur Nasional",
+    };
+  }
+
   const [y, m, d] = dateIso.split("-").map(Number);
   if (y && m && d) {
     const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       return {
         isHoliday: true,
+        isWorkdayOverride: false,
         reason: dayOfWeek === 0 ? "Hari Minggu" : "Hari Sabtu",
       };
     }
   }
 
-  const holidayDoc: any = await Holiday.findOne({ date: dateIso }).lean();
-  if (holidayDoc) {
-    return {
-      isHoliday: true,
-      reason: holidayDoc.name || "Hari Libur Nasional",
-    };
-  }
-
-  return { isHoliday: false };
+  return { isHoliday: false, isWorkdayOverride: false };
 }
 
 /**
- * Mengambil seluruh tanggal hari libur nasional/khusus (YYYY-MM-DD) dari database.
+ * Mengambil seluruh tanggal hari libur aktif (`holidayDates`) serta tanggal
+ * pengecualian tetap masuk (`overrideWorkdays`) dalam format YYYY-MM-DD dari database.
  */
-export async function getHolidayDateSet(): Promise<Set<string>> {
+export async function getHolidayConfigSets(): Promise<{
+  holidayDates: Set<string>;
+  overrideWorkdays: Set<string>;
+}> {
   await ensureDefaultHolidaysSeeded();
-  const docs = await Holiday.find().select("date").lean();
-  const set = new Set<string>();
+  const docs = await Holiday.find().select("date type").lean();
+  const holidayDates = new Set<string>();
+  const overrideWorkdays = new Set<string>();
+
   for (const doc of docs as any[]) {
-    if (doc?.date) {
-      set.add(String(doc.date).trim());
+    if (!doc?.date) continue;
+    const iso = String(doc.date).trim();
+    if (doc.type === "hari_masuk") {
+      overrideWorkdays.add(iso);
+    } else {
+      holidayDates.add(iso);
     }
   }
-  return set;
+  return { holidayDates, overrideWorkdays };
+}
+
+/**
+ * Mengambil seluruh tanggal hari libur nasional/khusus aktif (YYYY-MM-DD) dari database.
+ */
+export async function getHolidayDateSet(): Promise<Set<string>> {
+  const { holidayDates } = await getHolidayConfigSets();
+  return holidayDates;
 }

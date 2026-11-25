@@ -4,6 +4,7 @@ import {
   checkTodayHoliday,
   upsertHoliday,
   deleteHoliday,
+  toggleHolidayWorkday,
   restoreDefaultHolidays2026,
 } from "../controllers/holidayController";
 import { authMiddleware } from "../middlewares/auth.middleware";
@@ -31,6 +32,12 @@ router.post(
   authMiddleware,
   roleMiddleware(["admin", "superadmin"]),
   restoreDefaultHolidays2026,
+);
+router.patch(
+  "/:id/toggle-workday",
+  authMiddleware,
+  roleMiddleware(["admin", "superadmin"]),
+  toggleHolidayWorkday,
 );
 router.delete(
   "/:id",

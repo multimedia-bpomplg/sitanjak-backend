@@ -79,6 +79,15 @@ const LogbookSchema = new mongoose.Schema(
     finalizedAt: {
       type: Date,
     },
+
+    autoApproved: {
+      type: Boolean,
+      default: false,
+    },
+
+    autoApprovedAt: {
+      type: Date,
+    },
   },
 
   { timestamps: true },

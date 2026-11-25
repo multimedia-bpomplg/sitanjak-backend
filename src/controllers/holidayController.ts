@@ -11,6 +11,7 @@ const VALID_TYPES: HolidayType[] = [
   "libur_nasional",
   "cuti_bersama",
   "khusus",
+  "hari_masuk",
 ];
 
 function getTodayIsoWib(): string {
@@ -83,6 +84,15 @@ export const upsertHoliday = async (req: AuthRequest, res: Response) => {
       ? rawType
       : "khusus";
 
+    const existing = await Holiday.findOne({ date });
+    const preservedOriginalType =
+      type === "hari_masuk"
+        ? existing?.originalType ||
+          (existing?.type === "libur_nasional" || existing?.type === "cuti_bersama"
+            ? existing.type
+            : null)
+        : null;
+
     const saved = await Holiday.findOneAndUpdate(
       { date },
       {
@@ -90,6 +100,7 @@ export const upsertHoliday = async (req: AuthRequest, res: Response) => {
           date,
           name,
           type,
+          originalType: preservedOriginalType,
           source: "manual",
           createdBy: req.user?.id || null,
         },
@@ -99,7 +110,10 @@ export const upsertHoliday = async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: "Hari libur khusus berhasil disimpan",
+      message:
+        type === "hari_masuk"
+          ? "Tanggal berhasil dibuka sebagai hari kerja (tetap masuk)"
+          : "Hari libur khusus berhasil disimpan",
       data: saved,
     });
   } catch (err) {
@@ -128,6 +142,61 @@ export const deleteHoliday = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Gagal menghapus hari libur",
+    });
+  }
+};
+
+export const toggleHolidayWorkday = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  try {
+    const { id } = req.params;
+    const doc = await Holiday.findById(id);
+    if (!doc) {
+      return res
+        .status(404)
+        .json({ message: "Data hari libur tidak ditemukan" });
+    }
+
+    if (doc.type === "hari_masuk") {
+      if (doc.originalType === "libur_nasional" || doc.originalType === "cuti_bersama") {
+        doc.type = doc.originalType;
+        doc.source = "auto";
+        doc.originalType = null;
+        await doc.save();
+        return res.json({
+          success: true,
+          message: "Tanggal berhasil dikembalikan menjadi hari libur",
+          data: doc,
+        });
+      }
+
+      await Holiday.findByIdAndDelete(id);
+      return res.json({
+        success: true,
+        message: "Pengaturan hari kerja khusus berhasil dihapus",
+      });
+    }
+
+    if (doc.type === "libur_nasional" || doc.type === "cuti_bersama") {
+      doc.originalType = doc.type;
+    }
+    doc.type = "hari_masuk";
+    doc.source = "manual";
+    doc.createdBy = (req.user?.id as any) || null;
+    await doc.save();
+
+    return res.json({
+      success: true,
+      message: `${doc.name || doc.date} dibuka sebagai hari kerja (tetap masuk)`,
+      data: doc,
+    });
+  } catch (err) {
+    console.error("[TOGGLE HOLIDAY WORKDAY ERROR]", err);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal mengubah status hari masuk",
     });
   }
 };

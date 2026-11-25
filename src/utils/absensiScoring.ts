@@ -44,6 +44,7 @@ export function getWorkdaysInRange(
   startRaw?: string | null,
   endRaw?: string | null,
   holidayDates?: Set<string>,
+  overrideWorkdays?: Set<string>,
 ): string[] {
   const startIso = parseDateIso(startRaw);
   const endIso = parseDateIso(endRaw);
@@ -61,7 +62,8 @@ export function getWorkdaysInRange(
   while (cur <= last && guard < 500) {
     const day = cur.getDay();
     const iso = toIsoDate(cur);
-    if (day !== 0 && day !== 6 && !holidayDates?.has(iso)) {
+    const isRegularWorkday = day !== 0 && day !== 6 && !holidayDates?.has(iso);
+    if (isRegularWorkday || overrideWorkdays?.has(iso)) {
       result.push(iso);
     }
     cur.setDate(cur.getDate() + 1);
@@ -321,12 +323,15 @@ export function getFullInternshipWorkdaysUntilHMinus3(
   tanggalMulaiMagang?: string | null,
   tanggalSelesaiMagang?: string | null,
   holidayDates?: Set<string>,
+  overrideWorkdays?: Set<string>,
 ): Set<string> {
   const { startIso, cutoffEndIso } = getHMinus3CutoffIso(
     tanggalMulaiMagang,
     tanggalSelesaiMagang,
   );
-  return new Set(getWorkdaysInRange(startIso, cutoffEndIso, holidayDates));
+  return new Set(
+    getWorkdaysInRange(startIso, cutoffEndIso, holidayDates, overrideWorkdays),
+  );
 }
 
 /**
@@ -339,6 +344,7 @@ export function calculateFinalAttendanceScore(
   tanggalMulaiMagang?: string | null,
   tanggalSelesaiMagang?: string | null,
   holidayDates?: Set<string>,
+  overrideWorkdays?: Set<string>,
 ): {
   totalHariHadir: number;
   tidakAbsen: number;
@@ -355,6 +361,7 @@ export function calculateFinalAttendanceScore(
     tanggalMulaiMagang,
     tanggalSelesaiMagang,
     holidayDates,
+    overrideWorkdays,
   );
 
   // Filter record absensi hanya sampai H-3 (dan mulai dari startIso jika ada)

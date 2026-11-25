@@ -26,6 +26,7 @@ import heroSettingRoutes from "./heroSettingRoutes";
 import holidayRoutes from "./holidayRoutes";
 import profilSettingRoutes from "./profilSettingRoutes";
 import footerSettingRoutes from "./footerSettingRoutes";
+import galleryRoutes from "./galleryRoutes";
 
 const router = Router();
 
@@ -62,5 +63,6 @@ router.use("/hero-setting", heroSettingRoutes);
 router.use("/holidays", holidayRoutes);
 router.use("/profil-setting", profilSettingRoutes);
 router.use("/footer-setting", footerSettingRoutes);
+router.use("/gallery", galleryRoutes);
 
 export default router;

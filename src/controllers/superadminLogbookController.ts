@@ -2,8 +2,7 @@ import { Request, Response } from "express";
 import Logbook from "../models/Logbook";
 import Pendaftaran from "../models/pendaftaran";
 import User from "../models/User";
-import { createNotification } from "../services/notificationService";
-import { getHolidayDateSet } from "../services/holidayService";
+import { getHolidayConfigSets } from "../services/holidayService";
 import {
   getMissedCutoffDateWib,
   getWorkdaysInRange,
@@ -28,7 +27,7 @@ export const getAllLogbook = async (req: any, res: Response) => {
 /* ================= MONITORING LOGBOOK + BELUM MENGISI (ADMIN & SUPERADMIN) ================= */
 export const getLogbookMonitoringOverview = async (_req: any, res: Response) => {
   try {
-    const [logbooks, pendaftaranList, activeUsers, holidayDates] =
+    const [logbooks, pendaftaranList, activeUsers, holidayConfig] =
       await Promise.all([
         Logbook.find()
           .populate("user", "name email")
@@ -40,8 +39,9 @@ export const getLogbookMonitoringOverview = async (_req: any, res: Response) => 
           .populate("peserta.mentor", "name email")
           .lean(),
         User.find().select("_id name email").lean(),
-        getHolidayDateSet(),
+        getHolidayConfigSets(),
       ]);
+    const { holidayDates, overrideWorkdays } = holidayConfig;
 
     const cutoffDate = getMissedCutoffDateWib();
 
@@ -130,7 +130,12 @@ export const getLogbookMonitoringOverview = async (_req: any, res: Response) => 
 
         const expectedWorkdays =
           startIso && capEndIso >= startIso
-            ? getWorkdaysInRange(startIso, capEndIso, holidayDates)
+            ? getWorkdaysInRange(
+                startIso,
+                capEndIso,
+                holidayDates,
+                overrideWorkdays,
+              )
             : [];
         const missedDates = expectedWorkdays
           .filter((d) => !filledDateSet.has(d))
@@ -207,6 +212,7 @@ export const getLogbookMonitoringOverview = async (_req: any, res: Response) => 
       logbooks,
       pesertaMonitoring,
       holidayDates: Array.from(holidayDates),
+      overrideWorkdays: Array.from(overrideWorkdays),
       cutoffDate,
     });
   } catch (err) {
@@ -215,72 +221,13 @@ export const getLogbookMonitoringOverview = async (_req: any, res: Response) => 
   }
 };
 
-/* ================= SUPERADMIN APPROVE/REJECT LOGBOOK ================= */
-export const superadminApproveLogbook = async (req: any, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { approvalStatus, mentorNote } = req.body;
-    const superadminId = req.user.id;
-
-    const logbook = await Logbook.findById(id).populate("user", "name email");
-
-    if (!logbook) {
-      return res.status(404).json({ message: "Logbook tidak ditemukan" });
-    }
-
-    // Update status oleh admin / superadmin
-    logbook.approvalStatus = approvalStatus;
-    logbook.mentorNote = mentorNote || logbook.mentorNote;
-    logbook.approvedByMentor = approvalStatus === "disetujui";
-    logbook.approvedAt = new Date();
-    logbook.approvedBy = superadminId;
-
-    await logbook.save();
-
-    if ((logbook.user as any)?._id) {
-      const statusTitle =
-        approvalStatus === "disetujui"
-          ? "Laporan Harian Disetujui"
-          : approvalStatus === "revisi"
-            ? "Revisi Logbook Diminta"
-            : "Laporan Harian Ditolak";
-      const statusMsg =
-        approvalStatus === "disetujui"
-          ? `Laporan harian Anda untuk tanggal ${logbook.date} telah disetujui.`
-          : approvalStatus === "revisi"
-            ? `Admin meminta revisi logbook tanggal ${logbook.date}${mentorNote ? `: "${mentorNote}"` : "."}`
-            : `Laporan harian Anda untuk tanggal ${logbook.date} ditolak.`;
-
-      createNotification({
-        recipientId: (logbook.user as any)._id,
-        title: statusTitle,
-        message: statusMsg,
-        type:
-          approvalStatus === "disetujui"
-            ? "success"
-            : approvalStatus === "revisi"
-              ? "warning"
-              : "alert",
-        linkUrl: "/dashboard/peserta/isi-logbook",
-      });
-    }
-
-    const message =
-      approvalStatus === "disetujui"
-        ? "Logbook berhasil disetujui"
-        : approvalStatus === "revisi"
-          ? "Logbook dikembalikan untuk revisi"
-          : "Logbook berhasil ditolak";
-
-    res.json({
-      success: true,
-      message,
-      logbook,
-    });
-  } catch (err) {
-    console.error("[SUPERADMIN APPROVE LOGBOOK]", err);
-    res.status(500).json({ message: "Gagal memproses logbook" });
-  }
+/* ================= APPROVE/REJECT LOGBOOK (HANYA MENTOR) ================= */
+export const superadminApproveLogbook = async (_req: any, res: Response) => {
+  return res.status(403).json({
+    success: false,
+    message:
+      "Verifikasi logbook (Setujui / Revisi / Tolak) hanya dapat dilakukan oleh Mentor pembimbing",
+  });
 };
 
 /* ================= ENABLE MISSED DAY (SUPERADMIN ONLY) ================= */
