@@ -176,6 +176,7 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
     }
 
     const pendaftaranList = await Pendaftaran.find(pendaftaranFilter)
+      .sort({ createdAt: -1, _id: -1 })
       .populate("peserta.mentor", "name email posisiMentor nip")
       .lean();
 
@@ -197,7 +198,8 @@ export const getMentorPenilaianList = async (req: any, res: Response) => {
     const seenEmail = new Set<string>();
 
     for (const pend of pendaftaranList as any[]) {
-      for (const ps of pend.peserta || []) {
+      const pesertaEntries = [...(pend.peserta || [])].reverse();
+      for (const ps of pesertaEntries) {
         if (!isAdminOrSuperadmin) {
           const psMentorId = ps.mentor?._id
             ? ps.mentor._id.toString()

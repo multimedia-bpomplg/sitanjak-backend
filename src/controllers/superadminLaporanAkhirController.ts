@@ -13,51 +13,66 @@ export const getAllLaporanAkhir = async (req: any, res: Response) => {
         .populate("approvedByMentor", "name email")
         .sort({ createdAt: -1 }),
       Pendaftaran.find({ status: "Disetujui" })
-        .select("peserta.user peserta.email peserta.mentor")
+        .select(
+          "peserta.user peserta.email peserta.mentor peserta.posisi peserta.jurusan peserta.asal",
+        )
         .populate("peserta.mentor", "name email")
         .lean(),
     ]);
 
-    const mentorByUserId = new Map<
-      string,
-      { _id: string; name: string; email?: string }
-    >();
-    const mentorByEmail = new Map<
-      string,
-      { _id: string; name: string; email?: string }
-    >();
+    type PesertaLaporanMeta = {
+      mentor: { _id: string; name: string; email?: string } | null;
+      posisi?: string;
+      jurusan?: string;
+      asal?: { jenis?: string; nama?: string } | null;
+    };
+
+    const metaByUserId = new Map<string, PesertaLaporanMeta>();
+    const metaByEmail = new Map<string, PesertaLaporanMeta>();
 
     for (const pendaftaran of pendaftaranList as any[]) {
       for (const ps of pendaftaran.peserta || []) {
-        if (!ps?.mentor?.name) continue;
-        const mentorInfo = {
-          _id: ps.mentor._id?.toString() || "",
-          name: ps.mentor.name,
-          email: ps.mentor.email || "",
+        const mentorInfo = ps?.mentor?.name
+          ? {
+              _id: ps.mentor._id?.toString() || "",
+              name: ps.mentor.name,
+              email: ps.mentor.email || "",
+            }
+          : null;
+
+        const meta: PesertaLaporanMeta = {
+          mentor: mentorInfo,
+          posisi: ps?.posisi || undefined,
+          jurusan: ps?.jurusan || undefined,
+          asal: ps?.asal || null,
         };
-        if (ps.user) mentorByUserId.set(ps.user.toString(), mentorInfo);
-        if (ps.email) {
-          mentorByEmail.set(String(ps.email).trim().toLowerCase(), mentorInfo);
+
+        if (ps?.user) metaByUserId.set(ps.user.toString(), meta);
+        if (ps?.email) {
+          metaByEmail.set(String(ps.email).trim().toLowerCase(), meta);
         }
       }
     }
 
-    // Tambahkan fileUrl & mentor pembimbing untuk akses & filter di frontend
+    // Tambahkan fileUrl, mentor pembimbing, serta posisi/jurusan/asal peserta untuk filter di frontend
     const laporanWithUrl = laporanList.map((laporan) => {
       const laporanObj: any = laporan.toObject();
       const userId = laporanObj.user?._id?.toString() || "";
       const userEmail = String(laporanObj.user?.email || "")
         .trim()
         .toLowerCase();
-      const assignedMentor =
-        (userId && mentorByUserId.get(userId)) ||
-        (userEmail && mentorByEmail.get(userEmail)) ||
+      const matchedMeta =
+        (userId && metaByUserId.get(userId)) ||
+        (userEmail && metaByEmail.get(userEmail)) ||
         null;
 
       return {
         ...laporanObj,
         fileUrl: laporan.filePdf, // path file untuk akses
-        mentor: assignedMentor || laporanObj.approvedByMentor || null,
+        mentor: matchedMeta?.mentor || laporanObj.approvedByMentor || null,
+        posisi: matchedMeta?.posisi,
+        jurusan: matchedMeta?.jurusan,
+        asal: matchedMeta?.asal || null,
       };
     });
 
