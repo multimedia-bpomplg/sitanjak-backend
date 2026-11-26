@@ -326,6 +326,34 @@ export const getSuperadminDashboardSummary = async (
         ? parsedTrendMonthNum
         : "all";
 
+    const rawAnalyticsYear = String(req.query.analyticsYear ?? "")
+      .trim()
+      .toLowerCase();
+    const parsedAnalyticsYearNum = Number(rawAnalyticsYear);
+    const analyticsYear: "all" | number =
+      rawAnalyticsYear &&
+      rawAnalyticsYear !== "all" &&
+      Number.isFinite(parsedAnalyticsYearNum) &&
+      parsedAnalyticsYearNum >= 2000
+        ? parsedAnalyticsYearNum
+        : "all";
+
+    const rawAnalyticsMonth = String(req.query.analyticsMonth ?? "")
+      .trim()
+      .toLowerCase();
+    const parsedAnalyticsMonthNum = Number(rawAnalyticsMonth);
+    const analyticsMonth: "all" | number =
+      Number.isInteger(parsedAnalyticsMonthNum) &&
+      parsedAnalyticsMonthNum >= 1 &&
+      parsedAnalyticsMonthNum <= 12
+        ? parsedAnalyticsMonthNum
+        : "all";
+
+    const rawAnalyticsDate = String(req.query.analyticsDate ?? "").trim();
+    const analyticsDate = /^\d{4}-\d{2}-\d{2}$/.test(rawAnalyticsDate)
+      ? rawAnalyticsDate
+      : "";
+
     const hasEntityFilters = Boolean(
       filterPosisi ||
         filterInstansi ||
@@ -444,6 +472,7 @@ export const getSuperadminDashboardSummary = async (
 
     // Kumpulkan tahun, formasi, instansi & jurusan yang tersedia dari database
     const yearSet = new Set<number>([currentYear]);
+    const analyticsDateSet = new Set<string>();
     const formasiOptionMap = new Map<string, string>();
     const instansiOptionMap = new Map<string, string>();
     const jurusanOptionMap = new Map<string, string>();
@@ -462,13 +491,22 @@ export const getSuperadminDashboardSummary = async (
 
     for (const pd of pendaftaranList as any[]) {
       const iso = toWibIsoDate(pd.createdAt);
-      if (iso) yearSet.add(Number(iso.slice(0, 4)));
+      if (iso) {
+        yearSet.add(Number(iso.slice(0, 4)));
+        analyticsDateSet.add(iso);
+      }
       if (Array.isArray(pd.peserta)) {
         for (const ps of pd.peserta) {
           const start = toWibIsoDate(ps.tanggalMulaiMagang);
           const end = toWibIsoDate(ps.tanggalSelesaiMagang);
-          if (start) yearSet.add(Number(start.slice(0, 4)));
-          if (end) yearSet.add(Number(end.slice(0, 4)));
+          if (start) {
+            yearSet.add(Number(start.slice(0, 4)));
+            analyticsDateSet.add(start);
+          }
+          if (end) {
+            yearSet.add(Number(end.slice(0, 4)));
+            analyticsDateSet.add(end);
+          }
 
           const posLabel = String(ps.posisi || "").trim();
           const posKey = normalizeText(posLabel);
@@ -563,6 +601,31 @@ export const getSuperadminDashboardSummary = async (
     }
 
     const sortedYearsAsc = Array.from(yearSet).sort((a, b) => a - b);
+    const hasAnalyticsPeriodFilter = Boolean(
+      analyticsDate || analyticsYear !== "all" || analyticsMonth !== "all",
+    );
+    const matchesAnalyticsPeriod = (ps: any, pdCreatedIso?: string | null) => {
+      if (!hasAnalyticsPeriodFilter) return true;
+      const start =
+        toWibIsoDate(ps.tanggalMulaiMagang) || pdCreatedIso || todayIso;
+      const rawEnd = toWibIsoDate(ps.tanggalSelesaiMagang) || start;
+      const end = rawEnd < start ? start : rawEnd;
+
+      if (analyticsDate) {
+        return (
+          (start <= analyticsDate && end >= analyticsDate) ||
+          pdCreatedIso === analyticsDate
+        );
+      }
+
+      return matchesTrendPeriod({
+        startIso: start,
+        endIso: end,
+        trendYear: analyticsYear,
+        trendMonth: analyticsMonth,
+        sortedYears: sortedYearsAsc,
+      });
+    };
     const participantTrend = buildParticipantTrend({
       items: participantTrendItems,
       trendYear,
@@ -738,6 +801,7 @@ export const getSuperadminDashboardSummary = async (
 
       // Peminat per Formasi
       for (const ps of matchingPesertaInPd) {
+        if (!matchesAnalyticsPeriod(ps, createdIso)) continue;
         const fNama = String(ps.posisi || "").trim();
         if (fNama) {
           const fKey = normalizeText(fNama);
@@ -862,43 +926,48 @@ export const getSuperadminDashboardSummary = async (
           mentorWorkloadMap.set(mid, mEntry);
         }
 
-        // Demografi
-        const kat = resolveKategoriMagang(ps.jurusan, ps.kategoriMagang);
-        kategoriCountMap.set(kat, (kategoriCountMap.get(kat) || 0) + 1);
+        // Demografi (mengikuti filter analyticsYear / analyticsMonth / analyticsDate jika aktif)
+        if (matchesAnalyticsPeriod(ps, createdIso)) {
+          const kat = resolveKategoriMagang(ps.jurusan, ps.kategoriMagang);
+          kategoriCountMap.set(kat, (kategoriCountMap.get(kat) || 0) + 1);
 
-        const asalJenis = ps.asal?.jenis || "Lainnya";
-        asalJenisCountMap.set(
-          asalJenis,
-          (asalJenisCountMap.get(asalJenis) || 0) + 1,
-        );
+          const asalJenis = ps.asal?.jenis || "Lainnya";
+          asalJenisCountMap.set(
+            asalJenis,
+            (asalJenisCountMap.get(asalJenis) || 0) + 1,
+          );
 
-        const gender = ps.jenisKelamin || "Tidak Disebutkan";
-        genderCountMap.set(gender, (genderCountMap.get(gender) || 0) + 1);
+          const gender = ps.jenisKelamin || "Tidak Disebutkan";
+          genderCountMap.set(gender, (genderCountMap.get(gender) || 0) + 1);
 
-        const tipeLabel = pd.kategori === "bersama" ? "Kelompok" : "Individu";
-        tipePesertaMap.set(tipeLabel, (tipePesertaMap.get(tipeLabel) || 0) + 1);
+          const tipeLabel = pd.kategori === "bersama" ? "Kelompok" : "Individu";
+          tipePesertaMap.set(
+            tipeLabel,
+            (tipePesertaMap.get(tipeLabel) || 0) + 1,
+          );
 
-        const jurNama = String(ps.jurusan || "").trim();
-        if (jurNama) {
-          const jKey = normalizeText(jurNama);
-          const prevJ = jurusanBreakdownMap.get(jKey) || {
-            label: jurNama,
-            count: 0,
-          };
-          prevJ.count += 1;
-          jurusanBreakdownMap.set(jKey, prevJ);
-        }
+          const jurNama = String(ps.jurusan || "").trim();
+          if (jurNama) {
+            const jKey = normalizeText(jurNama);
+            const prevJ = jurusanBreakdownMap.get(jKey) || {
+              label: jurNama,
+              count: 0,
+            };
+            prevJ.count += 1;
+            jurusanBreakdownMap.set(jKey, prevJ);
+          }
 
-        const asalNama = String(ps.asal?.nama || "").trim();
-        if (asalNama) {
-          const key = normalizeText(asalNama);
-          const prev = topAsalNamaMap.get(key) || {
-            nama: asalNama,
-            jenis: asalJenis,
-            count: 0,
-          };
-          prev.count += 1;
-          topAsalNamaMap.set(key, prev);
+          const asalNama = String(ps.asal?.nama || "").trim();
+          if (asalNama) {
+            const key = normalizeText(asalNama);
+            const prev = topAsalNamaMap.get(key) || {
+              nama: asalNama,
+              jenis: asalJenis,
+              count: 0,
+            };
+            prev.count += 1;
+            topAsalNamaMap.set(key, prev);
+          }
         }
 
         const psEndQuarterIso = toWibIsoDate(ps.tanggalSelesaiMagang);
@@ -1360,6 +1429,7 @@ export const getSuperadminDashboardSummary = async (
       generatedAt: new Date().toISOString(),
       filterOptions: {
         years: Array.from(yearSet).sort((a, b) => b - a),
+        analyticsDates: Array.from(analyticsDateSet).sort(),
         formasiTitles: Array.from(formasiOptionMap.values()).sort((a, b) =>
           a.localeCompare(b, "id-ID"),
         ),
