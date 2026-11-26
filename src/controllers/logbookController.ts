@@ -10,6 +10,46 @@ import PDFDocument from "pdfkit";
 import { createNotification } from "../services/notificationService";
 import { isHolidayWib } from "../services/holidayService";
 
+function buildCaseInsensitiveEmailRegex(email: string): RegExp {
+  const escaped = email.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}$`, "i");
+}
+
+async function verifyMentorOwnsPeserta(
+  mentorId: string,
+  opts: { userId?: string; email?: string | null },
+): Promise<boolean> {
+  const mentorValue = mongoose.Types.ObjectId.isValid(mentorId)
+    ? new mongoose.Types.ObjectId(mentorId)
+    : mentorId;
+  const orConditions: any[] = [];
+  if (opts.userId && mongoose.Types.ObjectId.isValid(opts.userId)) {
+    orConditions.push({
+      peserta: {
+        $elemMatch: {
+          user: new mongoose.Types.ObjectId(opts.userId),
+          mentor: mentorValue,
+        },
+      },
+    });
+  }
+  if (opts.email && opts.email.trim()) {
+    orConditions.push({
+      peserta: {
+        $elemMatch: {
+          email: buildCaseInsensitiveEmailRegex(opts.email),
+          mentor: mentorValue,
+        },
+      },
+    });
+  }
+  if (orConditions.length === 0) return false;
+  const doc = await Pendaftaran.findOne({ $or: orConditions })
+    .select("_id")
+    .lean();
+  return Boolean(doc);
+}
+
 /* ================= CREATE LOGBOOK ================= */
 export const createLogbook = async (req: any, res: Response) => {
   try {
@@ -356,10 +396,10 @@ export const getLogbookByPeserta = async (req: any, res: Response) => {
       });
     }
 
-    // 🔒 Pastikan peserta ini milik mentor
-    const valid = await Pendaftaran.findOne({
-      "peserta.email": peserta.email,
-      "peserta.mentor": mentorId,
+    // 🔒 Pastikan peserta ini milik mentor (cocokkan userId maupun email case-insensitive)
+    const valid = await verifyMentorOwnsPeserta(mentorId, {
+      userId,
+      email: peserta.email,
     });
 
     if (!valid) {
@@ -397,10 +437,10 @@ export const getLogbookPesertaByDate = async (req: any, res: Response) => {
       });
     }
 
-    // Validasi mentor
-    const valid = await Pendaftaran.findOne({
-      "peserta.email": peserta.email,
-      "peserta.mentor": mentorId,
+    // Validasi mentor (cocokkan userId maupun email case-insensitive)
+    const valid = await verifyMentorOwnsPeserta(mentorId, {
+      userId,
+      email: peserta.email,
     });
 
     if (!valid) {
@@ -467,9 +507,9 @@ export const approveLogbook = async (req: Request, res: Response) => {
     }
 
     // 🔥 VALIDASI: Hanya mentor yang bisa approve logbook peserta bimbingannya
-    const isMentorOfPeserta = await Pendaftaran.findOne({
-      "peserta.email": (logbook.user as any).email,
-      "peserta.mentor": mentorId,
+    const isMentorOfPeserta = await verifyMentorOwnsPeserta(mentorId, {
+      userId: (logbook.user as any)?._id?.toString(),
+      email: (logbook.user as any)?.email,
     });
 
     if (!isMentorOfPeserta) {
@@ -539,22 +579,29 @@ export const approveLogbook = async (req: Request, res: Response) => {
 export const getLogbookByPesertaByEmail = async (req: any, res: Response) => {
   try {
     const mentorId = req.user.id;
-    const { email } = req.params;
+    const rawEmail = String(req.params.email || "").trim();
 
-    // cari user berdasarkan email
-    const peserta = await Pendaftaran.findOne({
-      "peserta.email": email,
-      "peserta.mentor": mentorId,
+    if (!rawEmail) {
+      return res.status(400).json({ message: "Email peserta diperlukan" });
+    }
+
+    const emailRegex = buildCaseInsensitiveEmailRegex(rawEmail);
+
+    // Cari user dengan email case-insensitive terlebih dahulu
+    const user = await User.findOne({ email: emailRegex }).select("_id email");
+
+    // Validasi apakah mentor berhak melihat logbook peserta ini
+    const ownsPeserta = await verifyMentorOwnsPeserta(mentorId, {
+      userId: user?._id?.toString(),
+      email: rawEmail,
     });
 
-    if (!peserta) {
+    if (!ownsPeserta) {
       return res.status(403).json({
         message: "Peserta bukan bimbingan Anda",
       });
     }
 
-    // Cari user dengan email tersebut
-    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: "User tidak ditemukan" });
     }
@@ -586,9 +633,9 @@ export const getFilledDatesByPeserta = async (req: any, res: Response) => {
     }
 
     // Validasi apakah mentor berhak melihat logbook peserta ini
-    const valid = await Pendaftaran.findOne({
-      "peserta.email": peserta.email,
-      "peserta.mentor": mentorId,
+    const valid = await verifyMentorOwnsPeserta(mentorId, {
+      userId,
+      email: peserta.email,
     });
 
     if (!valid) {
@@ -709,10 +756,10 @@ export const requestRevision = async (req: Request, res: Response) => {
       });
     }
 
-    // Validasi mentor
-    const valid = await Pendaftaran.findOne({
-      "peserta.email": (logbook.user as any).email,
-      "peserta.mentor": mentorId,
+    // Validasi mentor (cocokkan userId maupun email case-insensitive)
+    const valid = await verifyMentorOwnsPeserta(mentorId, {
+      userId: (logbook.user as any)?._id?.toString(),
+      email: (logbook.user as any)?.email,
     });
 
     if (!valid) {

@@ -9,7 +9,13 @@ export const getUserByEmail = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Email diperlukan" });
     }
 
-    const user = await User.findOne({ email }).select("_id name email");
+    const emailRegex = new RegExp(
+      `^${email.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+      "i",
+    );
+    const user = await User.findOne({ email: emailRegex }).select(
+      "_id name email",
+    );
 
     if (!user) {
       return res.status(404).json({ message: "User tidak ditemukan" });
